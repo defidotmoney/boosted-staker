@@ -1,0 +1,13 @@
+compiler:
+  solc:
+    evm_version: paris
+    remappings:
+      - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@5.0.2"
+
+dependencies:
+  - OpenZeppelin/openzeppelin-contracts@5.0.2
+
+networks:
+  default: hardhat
+
+autofetch_sources: true
