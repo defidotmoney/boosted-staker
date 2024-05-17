@@ -118,8 +118,7 @@ contract BoostedStaker {
         (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
         uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
 
-        uint weight = _amount >> 1;
-        _amount = weight << 1; // This helps prevent balance/weight discrepencies.
+        uint weight = _amount;
 
         acctData.pendingStake += uint112(weight);
         globalGrowthRate += uint112(weight);
@@ -180,8 +179,7 @@ contract BoostedStaker {
         uint16 bitmap = acctData.updateWeeksBitmap;
         uint128 weightToRemove;
 
-        uint128 amountNeeded = uint128(_amount >> 1);
-        _amount = amountNeeded << 1; // This helps prevent balance/weight discrepencies.
+        uint128 amountNeeded = uint128(_amount);
 
         if (bitmap > 0) {
             for (uint128 weekIndex; weekIndex < MAX_STAKE_GROWTH_WEEKS; ) {
@@ -223,7 +221,7 @@ contract BoostedStaker {
             acctData.updateWeeksBitmap = bitmap;
         }
 
-        uint pendingRemoved = (_amount >> 1) - amountNeeded;
+        uint pendingRemoved = _amount - amountNeeded;
         if (amountNeeded > 0) {
             weightToRemove += amountNeeded * uint128(1 + MAX_STAKE_GROWTH_WEEKS);
             acctData.realizedStake -= uint112(amountNeeded);
@@ -491,7 +489,7 @@ contract BoostedStaker {
     */
     function balanceOf(address _account) external view returns (uint) {
         AccountData memory acctData = accountData[_account];
-        return 2 * (acctData.pendingStake + acctData.realizedStake);
+        return (acctData.pendingStake + acctData.realizedStake);
     }
 
     /**
