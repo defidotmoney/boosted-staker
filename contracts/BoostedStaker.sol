@@ -20,14 +20,12 @@ contract BoostedStaker {
     mapping(address account => AccountData data) public accountData;
     mapping(address account => mapping(uint week => uint weight)) private accountWeeklyWeights;
     mapping(address account => mapping(uint week => ToRealize weight)) public accountWeeklyToRealize;
-    mapping(address account => mapping(uint week => uint amount)) public accountWeeklyMaxStake;
 
     // Global weight tracking stats vars.
     uint112 public globalGrowthRate;
     uint16 public globalLastUpdateWeek;
     mapping(uint week => uint weight) private globalWeeklyWeights;
     mapping(uint week => ToRealize weight) public globalWeeklyToRealize;
-    mapping(uint week => uint amount) public globalWeeklyMaxStake;
 
     // Generic token interface.
     uint public totalSupply;
@@ -37,7 +35,6 @@ contract BoostedStaker {
     address public owner;
     address public pendingOwner;
     mapping(address account => mapping(address caller => ApprovalStatus approvalStatus)) public approvedCaller;
-    mapping(address staker => bool approved) public approvedWeightedStaker;
 
     struct ToRealize {
         uint128 weightPersistent;
@@ -70,7 +67,6 @@ contract BoostedStaker {
     event Unstaked(address indexed account, uint indexed week, uint amount, uint newUserWeight, uint weightRemoved);
     event ApprovedCallerSet(address indexed account, address indexed caller, ApprovalStatus status);
     event OwnershipTransferred(address indexed newOwner);
-    event WeightedStakerSet(address indexed staker, bool approved);
 
     /**
         @param _token The token to be staked.
@@ -143,45 +139,6 @@ contract BoostedStaker {
         globalWeeklyWeights[systemWeek] = globalWeight + weight;
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
-        accountData[_account] = acctData;
-        totalSupply += _amount;
-
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
-        emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
-
-        return _amount;
-    }
-
-    /**
-        @notice Allows an option for an approved helper to stake to any account at any weight week.
-        @dev A stake using this method only effects weight in current and future weeks. It does not backfill prior weeks.
-        @param _amount Amount to stake
-        @return amount of tokens staked
-    */
-    function stakeAsMaxWeighted(address _account, uint _amount) external returns (uint) {
-        require(approvedWeightedStaker[msg.sender], "!approvedStaker");
-        require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
-
-        // Before going further, let's sync our account and global weights
-        uint systemWeek = getWeek();
-        (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
-
-        uint weight = _amount >> 1;
-        _amount = weight << 1;
-        acctData.realizedStake += uint112(weight);
-        weight = weight * (MAX_STAKE_GROWTH_WEEKS + 1);
-
-        // Note: The usage of `stakeAsMaxWeighted` breaks an ability to reliably derive account + global
-        // amount deposited at any week using `weeklyToRealize` variables.
-        // To make up for this, we introduce the following two variables that are meant to recover that same
-        // ability for any on-chain integrators. They may combine this new data with `weeklyToRealize`.
-        accountWeeklyMaxStake[_account][systemWeek] += _amount;
-        globalWeeklyMaxStake[systemWeek] += _amount;
-
-        accountWeeklyWeights[_account][systemWeek] = accountWeight + weight;
-        globalWeeklyWeights[systemWeek] = globalWeight + weight;
-
         accountData[_account] = acctData;
         totalSupply += _amount;
 
@@ -545,17 +502,6 @@ contract BoostedStaker {
     function setApprovedCaller(address _caller, ApprovalStatus _status) external {
         approvedCaller[msg.sender][_caller] = _status;
         emit ApprovedCallerSet(msg.sender, _caller, _status);
-    }
-
-    /**
-        @notice Allow owner to specify an account which has ability to stakeAsWeighted.
-        @param _staker Address of account with staker permissions.
-        @param _approved Approve or unapprove the staker.
-    */
-    function setWeightedStaker(address _staker, bool _approved) external {
-        require(msg.sender == owner, "!authorized");
-        approvedWeightedStaker[_staker] = _approved;
-        emit WeightedStakerSet(_staker, _approved);
     }
 
     /**
