@@ -189,7 +189,7 @@ contract BoostedStaker {
                     uint weekToCheck = systemWeek + MAX_STAKE_GROWTH_WEEKS - weekIndex;
                     uint128 pending = accountWeeklyToRealize[_account][weekToCheck].weight;
                     if (amountNeeded > pending) {
-                        weightToRemove += pending * (weekIndex + 1);
+                        weightToRemove += _getWeight(pending, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight = 0;
                         globalWeeklyToRealize[weekToCheck].weight -= pending;
                         if (weekIndex == 0) {
@@ -201,7 +201,7 @@ contract BoostedStaker {
                         amountNeeded -= pending;
                     } else {
                         // handle the case where we have more pending than needed
-                        weightToRemove += amountNeeded * (weekIndex + 1);
+                        weightToRemove += _getWeight(amountNeeded, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight -= amountNeeded;
                         globalWeeklyToRealize[weekToCheck].weight -= amountNeeded;
                         if (weekIndex == 0) {
@@ -223,7 +223,7 @@ contract BoostedStaker {
 
         uint pendingRemoved = _amount - amountNeeded;
         if (amountNeeded > 0) {
-            weightToRemove += amountNeeded * uint128(1 + MAX_STAKE_GROWTH_WEEKS);
+            weightToRemove += _getWeight(amountNeeded, MAX_STAKE_GROWTH_WEEKS);
             acctData.realizedStake -= uint112(amountNeeded);
             acctData.pendingStake = 0;
         } else {
@@ -319,7 +319,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight += pending; // Increment weights by weekly growth factor.
+            weight = _applyGrowthFactor(weight, pending);
             accountWeeklyWeights[_account][lastUpdateWeek] = weight;
 
             // Shift left on bitmap as we pass over each week.
@@ -382,7 +382,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight += pending; // Increment weight by 1 week
+            weight = _applyGrowthFactor(weight, pending);
 
             // Our bitmap is used to determine if week has any amount to realize.
             bitmap = bitmap << 1;
@@ -433,7 +433,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight += rate;
+            weight = _applyGrowthFactor(weight, rate);
             globalWeeklyWeights[lastUpdateWeek] = weight;
             rate -= globalWeeklyToRealize[lastUpdateWeek].weight;
         }
@@ -475,7 +475,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight += rate;
+            weight = _applyGrowthFactor(weight, rate);
             rate -= globalWeeklyToRealize[lastUpdateWeek].weight;
         }
 
@@ -538,5 +538,14 @@ contract BoostedStaker {
 
     function min(uint a, uint b) internal pure returns (uint) {
         return a < b ? a : b;
+    }
+
+    function _applyGrowthFactor(uint256 currentWeight, uint256 pendingStake) internal view returns (uint256 newWeight) {
+        return currentWeight + (pendingStake / MAX_STAKE_GROWTH_WEEKS);
+    }
+
+    function _getWeight(uint256 pendingStake, uint256 stakedWeeks) internal view returns (uint128 weight) {
+        uint256 weightMul = (pendingStake * stakedWeeks) / MAX_STAKE_GROWTH_WEEKS;
+        return uint128(pendingStake + weightMul);
     }
 }
