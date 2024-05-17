@@ -12,7 +12,7 @@ contract BoostedStaker {
     using SafeERC20 for IERC20;
 
     uint public immutable MAX_STAKE_GROWTH_WEEKS;
-    uint8 public immutable MAX_WEEK_BIT;
+    uint16 public immutable MAX_WEEK_BIT;
     uint public immutable START_TIME;
     IERC20 public immutable stakeToken;
 
@@ -50,10 +50,10 @@ contract BoostedStaker {
         // the corresponding week. We use this as a "map", allowing us to reduce gas consumption
         // by avoiding unnecessary lookups on weeks which an account has zero pending stake.
         //
-        // Example: 01000001
+        // Example: 0100000000000001
         // The left-most bit represents the final week of pendingStake.
-        // Therefore, we can see that account has stake updates to process only in weeks 7 and 1.
-        uint8 updateWeeksBitmap;
+        // Therefore, we can see that account has stake updates to process only in weeks 15 and 1.
+        uint16 updateWeeksBitmap;
     }
 
     enum ApprovalStatus {
@@ -82,9 +82,9 @@ contract BoostedStaker {
         emit OwnershipTransferred(_owner);
         stakeToken = IERC20(_token);
         decimals = IERC20Metadata(_token).decimals();
-        require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 7, "Invalid weeks");
+        require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
         MAX_STAKE_GROWTH_WEEKS = _max_stake_growth_weeks;
-        MAX_WEEK_BIT = uint8(1 << MAX_STAKE_GROWTH_WEEKS);
+        MAX_WEEK_BIT = uint16(1 << MAX_STAKE_GROWTH_WEEKS);
         if (_start_time == 0) {
             START_TIME = block.timestamp;
         } else {
@@ -177,7 +177,7 @@ contract BoostedStaker {
         _checkpointGlobal(systemWeek);
 
         // Here we do work to pull from most recent (least weighted) stake first
-        uint8 bitmap = acctData.updateWeeksBitmap;
+        uint16 bitmap = acctData.updateWeeksBitmap;
         uint128 weightToRemove;
 
         uint128 amountNeeded = uint128(_amount >> 1);
@@ -186,7 +186,7 @@ contract BoostedStaker {
         if (bitmap > 0) {
             for (uint128 weekIndex; weekIndex < MAX_STAKE_GROWTH_WEEKS; ) {
                 // Move right to left, checking each bit if there's an update for corresponding week.
-                uint8 mask = uint8(1 << weekIndex);
+                uint16 mask = uint16(1 << weekIndex);
                 if (bitmap & mask == mask) {
                     uint weekToCheck = systemWeek + MAX_STAKE_GROWTH_WEEKS - weekIndex;
                     uint128 pending = accountWeeklyToRealize[_account][weekToCheck].weight;
@@ -313,7 +313,7 @@ contract BoostedStaker {
         }
 
         weight = accountWeeklyWeights[_account][lastUpdateWeek];
-        uint8 bitmap = acctData.updateWeeksBitmap;
+        uint16 bitmap = acctData.updateWeeksBitmap;
         uint targetSyncWeek = min(_systemWeek, lastUpdateWeek + MAX_STAKE_GROWTH_WEEKS);
 
         // Populate data for missed weeks
@@ -377,7 +377,7 @@ contract BoostedStaker {
         uint pending = uint(acctData.pendingStake);
         if (pending == 0) return weight;
 
-        uint8 bitmap = acctData.updateWeeksBitmap;
+        uint16 bitmap = acctData.updateWeeksBitmap;
 
         while (lastUpdateWeek < _week) {
             // Populate data for missed weeks
