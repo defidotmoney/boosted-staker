@@ -29,7 +29,6 @@ contract BoostedStaker {
 
     // Generic token interface.
     uint public totalSupply;
-    uint8 public immutable decimals;
 
     // Permissioned roles
     address public owner;
@@ -81,7 +80,6 @@ contract BoostedStaker {
         owner = _owner;
         emit OwnershipTransferred(_owner);
         stakeToken = IERC20(_token);
-        decimals = IERC20Metadata(_token).decimals();
         require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
         MAX_STAKE_GROWTH_WEEKS = _max_stake_growth_weeks;
         MAX_WEEK_BIT = uint16(1 << MAX_STAKE_GROWTH_WEEKS);
