@@ -14,7 +14,7 @@ def test_weight_adjustments(staker, alice, unstake_week):
     staker.stake(10**18, {"from": alice})
 
     for i in range(1, 18):
-        chain.mine(timedelta=604801)
+        chain.mine(timedelta=staker.EPOCH_LENGTH() + 1)
         if i == unstake_week:
             staker.unstake(10**18, alice, {"from": alice})
 
@@ -33,7 +33,7 @@ def test_weight_adjustments_with_checkpoint(staker, alice, unstake_week):
     staker.stake(10**18, {"from": alice})
 
     for i in range(1, 18):
-        chain.mine(timedelta=604801)
+        chain.mine(timedelta=staker.EPOCH_LENGTH() + 1)
         staker.checkpointAccount(alice, {"from": alice})
         staker.checkpointGlobal({"from": alice})
 

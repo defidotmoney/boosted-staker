@@ -2,7 +2,8 @@ import pytest
 from brownie_tokens import ERC20
 
 
-MAX_GROWTH_WEEKS = 10
+MAX_GROWTH_EPOCHS = 10
+EPOCH_DAYS = 3
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -27,4 +28,6 @@ def token():
 
 @pytest.fixture(scope="module")
 def staker(BoostedStaker, token, deployer):
-    return BoostedStaker.deploy(token, MAX_GROWTH_WEEKS, 0, deployer, {"from": deployer})
+    return BoostedStaker.deploy(
+        token, MAX_GROWTH_EPOCHS, 0, EPOCH_DAYS, deployer, {"from": deployer}
+    )

@@ -14,6 +14,7 @@ contract BoostedStaker {
     uint public immutable MAX_STAKE_GROWTH_WEEKS;
     uint16 public immutable MAX_WEEK_BIT;
     uint public immutable START_TIME;
+    uint public immutable EPOCH_LENGTH;
     IERC20 public immutable stakeToken;
 
     // Account weight tracking state vars.
@@ -76,13 +77,14 @@ contract BoostedStaker {
                             Passing a value of 0 will start at block.timestamp.
         @param _owner       Owner is able to grant access to stake with max boost.
     */
-    constructor(address _token, uint _max_stake_growth_weeks, uint _start_time, address _owner) {
+    constructor(address _token, uint _max_stake_growth_weeks, uint _start_time, uint epoch_days, address _owner) {
         owner = _owner;
         emit OwnershipTransferred(_owner);
         stakeToken = IERC20(_token);
         require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
         MAX_STAKE_GROWTH_WEEKS = _max_stake_growth_weeks;
         MAX_WEEK_BIT = uint16(1 << MAX_STAKE_GROWTH_WEEKS);
+        EPOCH_LENGTH = epoch_days * 1 days;
         if (_start_time == 0) {
             START_TIME = block.timestamp;
         } else {
@@ -112,7 +114,7 @@ contract BoostedStaker {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
-        uint systemWeek = getWeek();
+        uint systemWeek = getEpoch();
         (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
         uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
 
@@ -167,7 +169,7 @@ contract BoostedStaker {
 
     function _unstake(address _account, uint _amount, address _receiver) internal returns (uint) {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
-        uint systemWeek = getWeek();
+        uint systemWeek = getEpoch();
 
         // Before going further, let's sync our account and global weights
         (AccountData memory acctData, ) = _checkpointAccount(_account, systemWeek);
@@ -253,7 +255,7 @@ contract BoostedStaker {
              contract -> contract interactions.
     */
     function checkpointAccount(address _account) external returns (AccountData memory acctData, uint weight) {
-        (acctData, weight) = _checkpointAccount(_account, getWeek());
+        (acctData, weight) = _checkpointAccount(_account, getEpoch());
         accountData[_account] = acctData;
     }
 
@@ -270,7 +272,7 @@ contract BoostedStaker {
         address _account,
         uint _week
     ) external returns (AccountData memory acctData, uint weight) {
-        uint systemWeek = getWeek();
+        uint systemWeek = getEpoch();
         if (_week >= systemWeek) _week = systemWeek;
         (acctData, weight) = _checkpointAccount(_account, _week);
         accountData[_account] = acctData;
@@ -353,14 +355,14 @@ contract BoostedStaker {
         @notice View function to get the current weight for an account
     */
     function getAccountWeight(address account) external view returns (uint) {
-        return getAccountWeightAt(account, getWeek());
+        return getAccountWeightAt(account, getEpoch());
     }
 
     /**
         @notice Get the weight for an account in a given week
     */
     function getAccountWeightAt(address _account, uint _week) public view returns (uint) {
-        if (_week > getWeek()) return 0;
+        if (_week > getEpoch()) return 0;
 
         AccountData memory acctData = accountData[_account];
 
@@ -401,7 +403,7 @@ contract BoostedStaker {
              contract -> contract interactions.
     */
     function checkpointGlobal() external returns (uint) {
-        uint systemWeek = getWeek();
+        uint systemWeek = getEpoch();
         return _checkpointGlobal(systemWeek);
     }
 
@@ -446,7 +448,7 @@ contract BoostedStaker {
         @notice Get the system weight for current week.
     */
     function getGlobalWeight() external view returns (uint) {
-        return getGlobalWeightAt(getWeek());
+        return getGlobalWeightAt(getEpoch());
     }
 
     /**
@@ -455,7 +457,7 @@ contract BoostedStaker {
         @param week the week number to query global weight for.
     */
     function getGlobalWeightAt(uint week) public view returns (uint) {
-        uint systemWeek = getWeek();
+        uint systemWeek = getEpoch();
         if (week > systemWeek) return 0;
 
         // Read these together since they are packed in the same slot.
@@ -528,9 +530,9 @@ contract BoostedStaker {
         if (amount > 0) IERC20(_token).safeTransfer(owner, amount);
     }
 
-    function getWeek() public view returns (uint week) {
+    function getEpoch() public view returns (uint week) {
         unchecked {
-            return (block.timestamp - START_TIME) / 1 weeks;
+            return (block.timestamp - START_TIME) / EPOCH_LENGTH;
         }
     }
 
