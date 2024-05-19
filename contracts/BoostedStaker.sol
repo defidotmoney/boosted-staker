@@ -198,7 +198,7 @@ contract BoostedStaker {
 
         // Here we do work to pull from most recent (least weighted) stake first
         uint16 bitmap = acctData.updateWeeksBitmap;
-        uint128 weightToRemove;
+        uint256 weightToRemove;
 
         uint128 amountNeeded = uint128(_amount);
 
@@ -331,7 +331,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight = _applyGrowthFactor(weight, pending);
+            weight += _getWeightGrowth(pending, 1);
             accountWeeklyWeights[_account][lastUpdateWeek] = weight;
 
             // Shift left on bitmap as we pass over each week.
@@ -396,7 +396,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight = _applyGrowthFactor(weight, pending);
+            weight += _getWeightGrowth(pending, 1);
 
             // Our bitmap is used to determine if week has any amount to realize.
             bitmap = bitmap << 1;
@@ -447,7 +447,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight = _applyGrowthFactor(weight, rate);
+            weight += _getWeightGrowth(rate, 1);
             globalWeeklyWeights[lastUpdateWeek] = weight;
             rate -= globalWeeklyToRealize[lastUpdateWeek];
         }
@@ -489,7 +489,8 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            weight = _applyGrowthFactor(weight, rate);
+
+            weight += _getWeightGrowth(rate, 1);
             rate -= globalWeeklyToRealize[lastUpdateWeek];
         }
 
@@ -554,12 +555,15 @@ contract BoostedStaker {
         return a < b ? a : b;
     }
 
-    function _applyGrowthFactor(uint256 currentWeight, uint256 pendingStake) internal view returns (uint256 newWeight) {
-        return currentWeight + (pendingStake / MAX_STAKE_GROWTH_WEEKS);
+    /** @dev The increased weight from `amount` after a number of epochs has passed */
+    function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint256 growth) {
+        assert(MAX_STAKE_GROWTH_WEEKS > epochs); // TODO remove me
+        return (amount * epochs) / MAX_STAKE_GROWTH_WEEKS;
     }
 
-    function _getWeight(uint256 pendingStake, uint256 stakedWeeks) internal view returns (uint128 weight) {
-        uint256 weightMul = (pendingStake * stakedWeeks) / MAX_STAKE_GROWTH_WEEKS;
-        return uint128(pendingStake + weightMul);
+    /** @dev The total weight of `amount` after a number of epochs has passed */
+    function _getWeight(uint256 amount, uint256 epochs) internal view returns (uint256 weight) {
+        uint256 growth = _getWeightGrowth(amount, epochs);
+        return uint128(amount + growth);
     }
 }
