@@ -3,6 +3,7 @@ pragma solidity 0.8.25;
 
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import { IFactory } from "./interfaces/IFactory.sol";
 
 /**
     @notice Boosted Staker
@@ -18,6 +19,7 @@ contract BoostedStaker {
     uint256 public immutable START_TIME;
     uint256 public immutable EPOCH_LENGTH;
     IERC20 public immutable stakeToken;
+    IFactory public immutable FACTORY;
 
     // Account weight tracking state vars.
     mapping(address account => AccountData data) public accountData;
@@ -34,8 +36,6 @@ contract BoostedStaker {
     uint128 public totalSupply;
 
     // Permissioned roles
-    address public owner;
-    address public pendingOwner;
     mapping(address account => mapping(address caller => ApprovalStatus approvalStatus)) public approvedCaller;
 
     struct ToRealize {
@@ -81,7 +81,6 @@ contract BoostedStaker {
         uint256 weightRemoved
     );
     event ApprovedCallerSet(address indexed account, address indexed caller, ApprovalStatus status);
-    event OwnershipTransferred(address indexed newOwner);
 
     /**
         @param _token The token to be staked.
@@ -90,18 +89,15 @@ contract BoostedStaker {
         @param _start_time  allows deployer to optionally set a custom start time.
                             useful if needed to line up with week count in another system.
                             Passing a value of 0 will start at block.timestamp.
-        @param _owner       Owner is able to grant access to stake with max boost.
     */
     constructor(
         address _token,
         uint256 _max_stake_growth_weeks,
         uint256 maxWeightMultiplier,
         uint256 _start_time,
-        uint256 epoch_days,
-        address _owner
+        uint256 epoch_days
     ) {
-        owner = _owner;
-        emit OwnershipTransferred(_owner);
+        FACTORY = IFactory(msg.sender);
         stakeToken = IERC20(_token);
         require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
         require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "Invalid MAX_WEIGHT_MULTIPLIER");
@@ -541,32 +537,13 @@ contract BoostedStaker {
         emit ApprovedCallerSet(msg.sender, _caller, _status);
     }
 
-    /**
-        @notice Set a pending owner which can later be accepted.
-        @param _pendingOwner Address of the new owner.
-    */
-    function transferOwnership(address _pendingOwner) external {
-        require(msg.sender == owner, "!authorized");
-        pendingOwner = _pendingOwner;
-    }
-
-    /**
-        @notice Allow pending owner to accept ownership
-    */
-    function acceptOwnership() external {
-        require(msg.sender == pendingOwner, "!authorized");
-        owner = msg.sender;
-        pendingOwner = address(0);
-        emit OwnershipTransferred(msg.sender);
-    }
-
-    function sweep(address _token) external {
-        require(msg.sender == owner, "!authorized");
-        uint256 amount = IERC20(_token).balanceOf(address(this));
-        if (_token == address(stakeToken)) {
+    function sweep(IERC20 token, address receiver) external {
+        require(msg.sender == FACTORY.owner(), "!authorized");
+        uint256 amount = token.balanceOf(address(this));
+        if (token == stakeToken) {
             amount = amount - totalSupply;
         }
-        if (amount > 0) IERC20(_token).safeTransfer(owner, amount);
+        if (amount > 0) token.safeTransfer(receiver, amount);
     }
 
     function getEpoch() public view returns (uint256 week) {
