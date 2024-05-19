@@ -11,6 +11,7 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 contract BoostedStaker {
     using SafeERC20 for IERC20;
 
+    uint256 private constant MAX_WEEKS = 65535;
     uint public immutable MAX_STAKE_GROWTH_WEEKS;
     uint16 public immutable MAX_WEEK_BIT;
     uint public immutable START_TIME;
@@ -19,17 +20,17 @@ contract BoostedStaker {
 
     // Account weight tracking state vars.
     mapping(address account => AccountData data) public accountData;
-    mapping(address account => mapping(uint week => uint weight)) private accountWeeklyWeights;
+    mapping(address account => uint128[MAX_WEEKS]) private accountWeeklyWeights;
     mapping(address account => mapping(uint week => ToRealize weight)) public accountWeeklyToRealize;
 
     // Global weight tracking stats vars.
+    uint128[MAX_WEEKS] private globalWeeklyWeights;
+    uint128[MAX_WEEKS] public globalWeeklyToRealize;
     uint112 public globalGrowthRate;
     uint16 public globalLastUpdateWeek;
-    mapping(uint week => uint weight) private globalWeeklyWeights;
-    mapping(uint week => uint weight) public globalWeeklyToRealize;
 
     // Generic token interface.
-    uint public totalSupply;
+    uint128 public totalSupply;
 
     // Permissioned roles
     address public owner;
@@ -126,12 +127,12 @@ contract BoostedStaker {
         accountWeeklyToRealize[_account][realizeWeek].weight += uint128(_amount);
         globalWeeklyToRealize[realizeWeek] += uint128(_amount);
 
-        accountWeeklyWeights[_account][systemWeek] = accountWeight + _amount;
-        globalWeeklyWeights[systemWeek] = globalWeight + _amount;
+        accountWeeklyWeights[_account][systemWeek] = uint128(accountWeight + _amount);
+        globalWeeklyWeights[systemWeek] = uint128(globalWeight + _amount);
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += _amount;
+        totalSupply += uint128(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + _amount, _amount);
@@ -155,12 +156,12 @@ contract BoostedStaker {
         uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
         accountWeeklyToRealize[_account][realizeWeek].locked += uint128(_amount);
 
-        accountWeeklyWeights[_account][systemWeek] = accountWeight + weight;
-        globalWeeklyWeights[systemWeek] = globalWeight + weight;
+        accountWeeklyWeights[_account][systemWeek] = uint128(accountWeight + weight);
+        globalWeeklyWeights[systemWeek] = uint128(globalWeight + weight);
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += _amount;
+        totalSupply += uint128(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
@@ -244,11 +245,11 @@ contract BoostedStaker {
         accountData[_account] = acctData;
 
         globalGrowthRate -= uint112(pendingRemoved);
-        globalWeeklyWeights[systemWeek] -= weightToRemove;
+        globalWeeklyWeights[systemWeek] -= uint128(weightToRemove);
         uint newAccountWeight = accountWeeklyWeights[_account][systemWeek] - weightToRemove;
-        accountWeeklyWeights[_account][systemWeek] = newAccountWeight;
+        accountWeeklyWeights[_account][systemWeek] = uint128(newAccountWeight);
 
-        totalSupply -= _amount;
+        totalSupply -= uint128(_amount);
 
         emit Unstaked(_account, systemWeek, _amount, newAccountWeight, weightToRemove);
 
@@ -292,12 +293,13 @@ contract BoostedStaker {
     function _checkpointAccount(
         address _account,
         uint _systemWeek
-    ) internal returns (AccountData memory acctData, uint weight) {
+    ) internal returns (AccountData memory acctData, uint128 weight) {
         acctData = accountData[_account];
         uint lastUpdateWeek = acctData.lastUpdateWeek;
+        uint128[MAX_WEEKS] storage weekly = accountWeeklyWeights[_account];
 
         if (_systemWeek == lastUpdateWeek) {
-            return (acctData, accountWeeklyWeights[_account][lastUpdateWeek]);
+            return (acctData, weekly[lastUpdateWeek]);
         }
 
         require(_systemWeek > lastUpdateWeek, "specified week is older than last update.");
@@ -308,13 +310,13 @@ contract BoostedStaker {
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
-                weight = accountWeeklyWeights[_account][lastUpdateWeek];
+                weight = weekly[lastUpdateWeek];
                 while (lastUpdateWeek < _systemWeek) {
                     unchecked {
                         lastUpdateWeek++;
                     }
                     // Fill in any missing weeks
-                    accountWeeklyWeights[_account][lastUpdateWeek] = weight;
+                    weekly[lastUpdateWeek] = weight;
                 }
             }
             accountData[_account].lastUpdateWeek = uint16(_systemWeek);
@@ -322,7 +324,7 @@ contract BoostedStaker {
             return (acctData, weight);
         }
 
-        weight = accountWeeklyWeights[_account][lastUpdateWeek];
+        weight = weekly[lastUpdateWeek];
         uint16 bitmap = acctData.updateWeeksBitmap;
         uint targetSyncWeek = min(_systemWeek, lastUpdateWeek + MAX_STAKE_GROWTH_WEEKS);
 
@@ -332,7 +334,7 @@ contract BoostedStaker {
                 lastUpdateWeek++;
             }
             weight += _getWeightGrowth(pending, 1);
-            accountWeeklyWeights[_account][lastUpdateWeek] = weight;
+            weekly[lastUpdateWeek] = weight;
 
             // Shift left on bitmap as we pass over each week.
             bitmap = bitmap << 1;
@@ -352,7 +354,7 @@ contract BoostedStaker {
             unchecked {
                 lastUpdateWeek++;
             }
-            accountWeeklyWeights[_account][lastUpdateWeek] = weight;
+            weekly[lastUpdateWeek] = weight;
         }
 
         // Write new account data to storage.
@@ -432,7 +434,7 @@ contract BoostedStaker {
         uint16 lastUpdateWeek = globalLastUpdateWeek;
         uint rate = globalGrowthRate;
 
-        uint weight = globalWeeklyWeights[lastUpdateWeek];
+        uint128 weight = globalWeeklyWeights[lastUpdateWeek];
 
         if (weight == 0) {
             globalLastUpdateWeek = uint16(systemWeek);
@@ -556,14 +558,14 @@ contract BoostedStaker {
     }
 
     /** @dev The increased weight from `amount` after a number of epochs has passed */
-    function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint256 growth) {
-        assert(MAX_STAKE_GROWTH_WEEKS > epochs); // TODO remove me
-        return (amount * epochs) / MAX_STAKE_GROWTH_WEEKS;
+    function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
+        assert(MAX_STAKE_GROWTH_WEEKS >= epochs); // TODO remove me
+        return uint128((amount * epochs) / MAX_STAKE_GROWTH_WEEKS);
     }
 
     /** @dev The total weight of `amount` after a number of epochs has passed */
     function _getWeight(uint256 amount, uint256 epochs) internal view returns (uint256 weight) {
         uint256 growth = _getWeightGrowth(amount, epochs);
-        return uint128(amount + growth);
+        return amount + growth;
     }
 }
