@@ -3,6 +3,7 @@ from brownie_tokens import ERC20
 
 
 MAX_GROWTH_EPOCHS = 10
+MAX_WEIGHT_MULTIPLIER = 2
 EPOCH_DAYS = 3
 
 
@@ -29,5 +30,5 @@ def token():
 @pytest.fixture(scope="module")
 def staker(BoostedStaker, token, deployer):
     return BoostedStaker.deploy(
-        token, MAX_GROWTH_EPOCHS, 0, EPOCH_DAYS, deployer, {"from": deployer}
+        token, MAX_GROWTH_EPOCHS, MAX_WEIGHT_MULTIPLIER, 0, EPOCH_DAYS, deployer, {"from": deployer}
     )

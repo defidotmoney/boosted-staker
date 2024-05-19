@@ -13,6 +13,7 @@ contract BoostedStaker {
 
     uint256 private constant MAX_WEEKS = 65535;
     uint256 public immutable MAX_STAKE_GROWTH_WEEKS;
+    uint256 public immutable MAX_WEIGHT_MULTIPLIER;
     uint16 public immutable MAX_WEEK_BIT;
     uint256 public immutable START_TIME;
     uint256 public immutable EPOCH_LENGTH;
@@ -94,6 +95,7 @@ contract BoostedStaker {
     constructor(
         address _token,
         uint256 _max_stake_growth_weeks,
+        uint256 maxWeightMultiplier,
         uint256 _start_time,
         uint256 epoch_days,
         address _owner
@@ -102,7 +104,9 @@ contract BoostedStaker {
         emit OwnershipTransferred(_owner);
         stakeToken = IERC20(_token);
         require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
+        require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "Invalid MAX_WEIGHT_MULTIPLIER");
         MAX_STAKE_GROWTH_WEEKS = _max_stake_growth_weeks;
+        MAX_WEIGHT_MULTIPLIER = maxWeightMultiplier;
         MAX_WEEK_BIT = uint16(1 << MAX_STAKE_GROWTH_WEEKS);
         EPOCH_LENGTH = epoch_days * 1 days;
         if (_start_time == 0) {
@@ -578,6 +582,7 @@ contract BoostedStaker {
     /** @dev The increased weight from `amount` after a number of epochs has passed */
     function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
         assert(MAX_STAKE_GROWTH_WEEKS >= epochs); // TODO remove me
+        amount *= MAX_WEIGHT_MULTIPLIER - 1;
         return uint128((amount * epochs) / MAX_STAKE_GROWTH_WEEKS);
     }
 
