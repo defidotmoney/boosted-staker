@@ -60,6 +60,21 @@ contract BoostedStaker {
         uint16 updateEpochBitmap;
     }
 
+    struct AccountView {
+        uint256 balance;
+        uint256 weight;
+        uint256 realizedStake;
+        uint256 pendingStake;
+        uint256 lockedStake;
+    }
+
+    struct FutureRealizedStake {
+        uint256 epochsToMaturity;
+        uint256 timestampAtMaturity;
+        uint256 pendingStake;
+        uint256 lockedStake;
+    }
+
     event Staked(
         address indexed account,
         uint256 indexed epoch,
@@ -177,6 +192,93 @@ contract BoostedStaker {
         }
 
         return weight;
+    }
+
+    /**
+        @notice Get a detailed view of staked balances and weight for `account`
+        @return accountView Detailed information on account weight and balances:
+                 * total deposited balance
+                 * current weight
+                 * realized stake (balance receiving maximum weight)
+                 * pending stake (balance where weight is still increasing)
+                 * locked stake (max weight, but cannot be withdrawn)
+        @return futureRealizedStake Array detailing pending and locked stake balances:
+                 * number of epochs remaining until balances convert to realized
+                 * timestamp when balances are realized
+                 * pending balance to be realized in this epoch
+                 * locked balance to be realized in this epoch
+     */
+    function getAccountFullView(
+        address account
+    ) external view returns (AccountView memory accountView, FutureRealizedStake[] memory futureRealizedStake) {
+        uint256 systemEpoch = getEpoch();
+
+        AccountData storage acctData = accountData[account];
+        uint256 lastUpdateEpoch = acctData.lastUpdateEpoch;
+
+        accountView.pendingStake = acctData.pendingStake;
+        accountView.lockedStake = acctData.lockedStake;
+        accountView.realizedStake = acctData.realizedStake;
+        accountView.weight = accountEpochWeights[account][lastUpdateEpoch];
+        accountView.balance = acctData.pendingStake + acctData.lockedStake + acctData.realizedStake;
+
+        if (accountView.lockedStake > 0 && !isLockingEnabled()) {
+            accountView.realizedStake += accountView.lockedStake;
+            accountView.lockedStake = 0;
+        }
+
+        if (accountView.pendingStake + accountView.lockedStake > 0) {
+            uint16 bitmap = acctData.updateEpochBitmap;
+            uint256 targetSyncEpoch = min(systemEpoch, lastUpdateEpoch + STAKE_GROWTH_EPOCHS);
+
+            // Populate data for missed epochs
+            while (lastUpdateEpoch < targetSyncEpoch) {
+                unchecked {
+                    lastUpdateEpoch++;
+                }
+                accountView.weight += _getWeightGrowth(accountView.pendingStake, 1);
+
+                // Shift left on bitmap as we pass over each epoch.
+                bitmap = bitmap << 1;
+                if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
+                    // If left-most bit is true, we have something to realize; push pending to realized.
+                    // Do any updates needed to realize an amount for an account.
+                    ToRealize memory epochRealized = accountEpochToRealize[account][lastUpdateEpoch];
+                    accountView.pendingStake -= epochRealized.weight;
+                    accountView.realizedStake += epochRealized.weight;
+
+                    if (accountView.lockedStake > 0) {
+                        // skip if `locked == 0` to avoid issues after disabling locks
+                        accountView.lockedStake -= epochRealized.locked;
+                        accountView.realizedStake += epochRealized.locked;
+                    }
+
+                    if (accountView.pendingStake == 0 && accountView.lockedStake == 0) break;
+                }
+            }
+
+            lastUpdateEpoch = systemEpoch;
+            futureRealizedStake = new FutureRealizedStake[](STAKE_GROWTH_EPOCHS);
+            uint256 length = 0;
+            while (bitmap != 0) {
+                lastUpdateEpoch++;
+                bitmap = bitmap << 1;
+                if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
+                    ToRealize memory epochRealized = accountEpochToRealize[account][lastUpdateEpoch];
+                    futureRealizedStake[length] = FutureRealizedStake(
+                        lastUpdateEpoch - systemEpoch,
+                        START_TIME + (lastUpdateEpoch * EPOCH_LENGTH),
+                        epochRealized.weight,
+                        epochRealized.locked
+                    );
+                    length++;
+                }
+            }
+            // reduce length of `futureRealizedStake` prior to returning
+            assembly {
+                mstore(futureRealizedStake, length)
+            }
+        }
     }
 
     /**
