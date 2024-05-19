@@ -37,7 +37,7 @@ contract BoostedStaker {
     bool private locksEnabled;
 
     // Permissioned roles
-    mapping(address account => mapping(address caller => ApprovalStatus approvalStatus)) public approvedCaller;
+    mapping(address account => mapping(address caller => bool approvalStatus)) public isApprovedUnstaker;
 
     struct ToRealize {
         uint128 weight;
@@ -60,13 +60,6 @@ contract BoostedStaker {
         uint16 updateEpochBitmap;
     }
 
-    enum ApprovalStatus {
-        None, // 0. Default value, indicating no approval
-        StakeOnly, // 1. Approved for stake only
-        UnstakeOnly, // 2. Approved for unstake only
-        StakeAndUnstake // 3. Approved for both stake and unstake
-    }
-
     event Staked(
         address indexed account,
         uint256 indexed epoch,
@@ -81,7 +74,7 @@ contract BoostedStaker {
         uint256 newUserWeight,
         uint256 weightRemoved
     );
-    event ApprovedCallerSet(address indexed account, address indexed caller, ApprovalStatus status);
+    event ApprovedUnstakerSet(address indexed account, address indexed caller, bool isApproved);
 
     /**
         @param _token The token to be staked.
@@ -118,10 +111,6 @@ contract BoostedStaker {
         @param _amount Amount of tokens to stake.
     */
     function stake(address _account, uint256 _amount) external returns (uint256) {
-        if (msg.sender != _account) {
-            ApprovalStatus status = approvedCaller[_account][msg.sender];
-            require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.StakeOnly, "!Permission");
-        }
         require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
@@ -150,7 +139,6 @@ contract BoostedStaker {
     }
 
     function lock(address _account, uint256 _amount) external {
-        // TODO: ACL
         require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
         require(isLockingEnabled(), "Locks are disabled");
 
@@ -185,8 +173,7 @@ contract BoostedStaker {
         require(_amount > 0, "Cannot unstake 0");
 
         if (msg.sender != _account) {
-            ApprovalStatus status = approvedCaller[_account][msg.sender];
-            require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.UnstakeOnly, "!Permission");
+            require(isApprovedUnstaker[_account][msg.sender], "Not approved unstaker");
         }
 
         uint256 systemEpoch = getEpoch();
@@ -521,13 +508,14 @@ contract BoostedStaker {
     }
 
     /**
-        @notice Allow another address to stake or unstake on behalf of. Useful for zaps and other functionality.
+        @notice Allow another address to unstake on behalf of the caller.
+                Useful for zaps and other functionality.
         @param _caller Address of the caller to approve or unapprove.
-        @param _status Enum representing various approval status states.
+        @param isApproved is `_caller` approved?
     */
-    function setApprovedCaller(address _caller, ApprovalStatus _status) external {
-        approvedCaller[msg.sender][_caller] = _status;
-        emit ApprovedCallerSet(msg.sender, _caller, _status);
+    function setApprovedUnstaker(address _caller, bool isApproved) external {
+        isApprovedUnstaker[msg.sender][_caller] = isApproved;
+        emit ApprovedUnstakerSet(msg.sender, _caller, isApproved);
     }
 
     function sweep(IERC20 token, address receiver) external {
