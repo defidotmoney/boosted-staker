@@ -55,7 +55,7 @@ def test_lock(staker, alice):
     staker.lock(alice, 10**18, {"from": alice})
 
     for i in range(10):
-        with brownie.reverts("Insufficient balance"):
+        with brownie.reverts("DFM:BS Insufficient balance"):
             staker.unstake(alice, 10**18, alice, {"from": alice})
 
         assert staker.getAccountWeight(alice) == 2 * 10**18

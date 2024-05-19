@@ -18,7 +18,7 @@ contract StakerFactory is Ownable2Step {
     bool public isLockingEnabled;
 
     constructor(uint256 epochDays, uint256 stakeGrowthEpochs) Ownable(msg.sender) {
-        require(stakeGrowthEpochs > 0 && stakeGrowthEpochs < 16, "Invalid STAKE_GROWTH_EPOCHS");
+        require(stakeGrowthEpochs > 0 && stakeGrowthEpochs < 16, "DFM:BSF STAKE_GROWTH_EPOCHS");
 
         EPOCH_DAYS = epochDays;
         STAKE_GROWTH_EPOCHS = stakeGrowthEpochs;
@@ -37,8 +37,8 @@ contract StakerFactory is Ownable2Step {
         @dev We use CREATE2 to generate deterministic deployments based on `token`
     */
     function deployBoostedStaker(address token, uint maxWeightMultiplier) external onlyOwner returns (address) {
-        require(boostedStakers[token] == address(0), "Already deployed for this token");
-        require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "Invalid MAX_WEIGHT_MULTIPLIER");
+        require(boostedStakers[token] == address(0), "DFM:BSF Already deployed");
+        require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "DFM:BSF MAX_WEIGHT_MULTIPLIER");
 
         uint256 salt = uint256(uint160(token));
         bytes memory bytecodeWithArgs = abi.encodePacked(
@@ -50,7 +50,7 @@ contract StakerFactory is Ownable2Step {
         assembly {
             deployedAddress := create2(0, add(bytecodeWithArgs, 0x20), mload(bytecodeWithArgs), salt)
         }
-        require(deployedAddress != address(0), "Failed to deploy contract");
+        require(deployedAddress != address(0), "DFM:BSF Deployment failed");
 
         boostedStakers[token] = deployedAddress;
         return deployedAddress;

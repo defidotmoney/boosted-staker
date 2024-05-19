@@ -112,7 +112,7 @@ contract BoostedStaker {
     }
 
     modifier onlyOwner() {
-        require(msg.sender == FACTORY.owner(), "!authorized");
+        require(msg.sender == FACTORY.owner(), "DFM:BS Not authorized");
         _;
     }
 
@@ -339,7 +339,7 @@ contract BoostedStaker {
         @param _amount Amount of tokens to lock.
     */
     function lock(address _account, uint256 _amount) external {
-        require(isLockingEnabled(), "Locks are disabled");
+        require(isLockingEnabled(), "DFM:BS Locks are disabled");
         _stake(_account, _amount, true);
     }
 
@@ -348,10 +348,10 @@ contract BoostedStaker {
         @dev In a partial restake, tokens giving the least weight are withdrawn first.
     */
     function unstake(address _account, uint256 _amount, address _receiver) external {
-        require(_amount > 0, "Cannot unstake 0");
+        require(_amount > 0, "DFM:BS Cannot unstake 0");
 
         if (msg.sender != _account) {
-            require(isApprovedUnstaker[_account][msg.sender], "Not approved unstaker");
+            require(isApprovedUnstaker[_account][msg.sender], "DFM:BS Not approved unstaker");
         }
 
         // Before going further, let's sync our account and global weights
@@ -359,7 +359,7 @@ contract BoostedStaker {
         (AccountData memory acctData, ) = _checkpointAccount(_account, systemEpoch);
         _checkpointGlobal(systemEpoch);
 
-        require(acctData.realizedStake + acctData.pendingStake >= _amount, "Insufficient balance");
+        require(acctData.realizedStake + acctData.pendingStake >= _amount, "DFM:BS Insufficient balance");
 
         // Here we do work to pull from most recent (least weighted) stake first
         uint16 bitmap = acctData.updateEpochBitmap;
@@ -502,7 +502,8 @@ contract BoostedStaker {
     }
 
     function _stake(address _account, uint256 _amount, bool isLocked) internal {
-        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
+        require(_amount > 0, "DFM:BS Cannot stake 0");
+        require(_amount < type(uint112).max, "DFM:BS Amount too large");
 
         // Before going further, let's sync our account and global weights
         uint256 systemEpoch = getEpoch();
@@ -560,7 +561,7 @@ contract BoostedStaker {
             return (acctData, epochWeights[lastUpdateEpoch]);
         }
 
-        require(_systemEpoch > lastUpdateEpoch, "specified epoch is older than last update.");
+        require(_systemEpoch > lastUpdateEpoch, "DFM:BS Invalid epoch");
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
