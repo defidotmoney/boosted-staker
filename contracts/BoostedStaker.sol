@@ -24,7 +24,7 @@ contract BoostedStaker {
     // Account weight tracking state vars.
     mapping(address account => AccountData data) public accountData;
     mapping(address account => uint128[MAX_EPOCHS]) private accountEpochWeights;
-    mapping(address account => mapping(uint256 epoch => ToRealize weight)) public accountEpochToRealize;
+    mapping(address account => ToRealize[MAX_EPOCHS] weight) public accountEpochToRealize;
 
     // Global weight tracking stats vars.
     uint128[MAX_EPOCHS] private globalEpochWeights;
@@ -110,49 +110,39 @@ contract BoostedStaker {
         @notice Stake tokens into the staking contract.
         @param _amount Amount of tokens to stake.
     */
-    function stake(address _account, uint256 _amount) external returns (uint256) {
-        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
-
-        // Before going further, let's sync our account and global weights
-        uint256 systemEpoch = getEpoch();
-        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
-
-        acctData.pendingStake += uint112(_amount);
-        globalGrowthRate += uint112(_amount);
-
-        uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
-        accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
-        globalEpochToRealize[realizeEpoch] += uint128(_amount);
-
-        accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + _amount);
-        globalEpochWeights[systemEpoch] = uint128(globalWeight + _amount);
-
-        acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
-        accountData[_account] = acctData;
-        totalSupply += uint120(_amount);
-
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemEpoch, _amount, accountWeight + _amount, _amount);
-
-        return _amount;
+    function stake(address _account, uint256 _amount) external {
+        _stake(_account, _amount, false);
     }
 
     function lock(address _account, uint256 _amount) external {
-        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
         require(isLockingEnabled(), "Locks are disabled");
+        _stake(_account, _amount, true);
+    }
+
+    function _stake(address _account, uint256 _amount, bool isLocked) internal {
+        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
         uint256 systemEpoch = getEpoch();
         (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
         uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
 
-        uint256 weight = _getWeight(_amount, STAKE_GROWTH_EPOCHS);
-
-        acctData.lockedStake += uint112(_amount);
-
         uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
-        accountEpochToRealize[_account][realizeEpoch].locked += uint128(_amount);
+
+        uint256 weight;
+        if (isLocked) {
+            weight = _getWeight(_amount, STAKE_GROWTH_EPOCHS);
+            acctData.lockedStake += uint112(_amount);
+
+            accountEpochToRealize[_account][realizeEpoch].locked += uint128(_amount);
+        } else {
+            weight = _amount;
+            acctData.pendingStake += uint112(_amount);
+            globalGrowthRate += uint112(_amount);
+
+            accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
+            globalEpochToRealize[realizeEpoch] += uint128(_amount);
+        }
 
         accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + weight);
         globalEpochWeights[systemEpoch] = uint128(globalWeight + weight);
@@ -189,6 +179,7 @@ contract BoostedStaker {
         uint256 weightToRemove;
 
         uint128 amountNeeded = uint128(_amount);
+        ToRealize[MAX_EPOCHS] storage epochToRealize = accountEpochToRealize[_account];
 
         if (bitmap > 0) {
             for (uint128 epochIndex; epochIndex < STAKE_GROWTH_EPOCHS; ) {
@@ -196,17 +187,17 @@ contract BoostedStaker {
                 uint16 mask = uint16(1 << epochIndex);
                 if (bitmap & mask == mask) {
                     uint256 epochToCheck = systemEpoch + STAKE_GROWTH_EPOCHS - epochIndex;
-                    uint128 pending = accountEpochToRealize[_account][epochToCheck].weight;
+                    uint128 pending = epochToRealize[epochToCheck].weight;
                     if (amountNeeded > pending) {
                         weightToRemove += _getWeight(pending, epochIndex);
-                        accountEpochToRealize[_account][epochToCheck].weight = 0;
+                        epochToRealize[epochToCheck].weight = 0;
                         globalEpochToRealize[epochToCheck] -= pending;
                         bitmap = bitmap ^ mask;
                         amountNeeded -= pending;
                     } else {
                         // handle the case where we have more pending than needed
                         weightToRemove += _getWeight(amountNeeded, epochIndex);
-                        accountEpochToRealize[_account][epochToCheck].weight -= amountNeeded;
+                        epochToRealize[epochToCheck].weight -= amountNeeded;
                         globalEpochToRealize[epochToCheck] -= amountNeeded;
                         if (amountNeeded == pending) bitmap = bitmap ^ mask;
                         amountNeeded = 0;
