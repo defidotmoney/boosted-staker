@@ -12,10 +12,10 @@ import { IFactory } from "./interfaces/IFactory.sol";
 contract BoostedStaker {
     using SafeERC20 for IERC20;
 
-    uint256 private constant MAX_WEEKS = 65535;
-    uint256 public immutable MAX_STAKE_GROWTH_WEEKS;
+    uint256 private constant MAX_EPOCHS = 65535;
+    uint256 public immutable STAKE_GROWTH_EPOCHS;
     uint256 public immutable MAX_WEIGHT_MULTIPLIER;
-    uint16 public immutable MAX_WEEK_BIT;
+    uint16 public immutable MAX_EPOCH_BIT;
     uint256 public immutable START_TIME;
     uint256 public immutable EPOCH_LENGTH;
     IERC20 public immutable stakeToken;
@@ -23,14 +23,14 @@ contract BoostedStaker {
 
     // Account weight tracking state vars.
     mapping(address account => AccountData data) public accountData;
-    mapping(address account => uint128[MAX_WEEKS]) private accountWeeklyWeights;
-    mapping(address account => mapping(uint256 week => ToRealize weight)) public accountWeeklyToRealize;
+    mapping(address account => uint128[MAX_EPOCHS]) private accountEpochWeights;
+    mapping(address account => mapping(uint256 epoch => ToRealize weight)) public accountEpochToRealize;
 
     // Global weight tracking stats vars.
-    uint128[MAX_WEEKS] private globalWeeklyWeights;
-    uint128[MAX_WEEKS] public globalWeeklyToRealize;
+    uint128[MAX_EPOCHS] private globalEpochWeights;
+    uint128[MAX_EPOCHS] public globalEpochToRealize;
     uint112 public globalGrowthRate;
-    uint16 public globalLastUpdateWeek;
+    uint16 public globalLastUpdateEpoch;
 
     uint120 public totalSupply;
 
@@ -48,16 +48,16 @@ contract BoostedStaker {
         uint112 realizedStake; // Amount of stake that has fully realized weight.
         uint112 pendingStake; // Amount of stake that has not yet fully realized weight.
         uint112 lockedStake;
-        uint16 lastUpdateWeek; // Week of last sync.
-        // One byte member to represent weeks in which an account has pending weight changes.
+        uint16 lastUpdateEpoch; // Epoch of last sync.
+        // One byte member to represent epochs in which an account has pending weight changes.
         // A bit is set to true when the account has a non-zero token balance to be realized in
-        // the corresponding week. We use this as a "map", allowing us to reduce gas consumption
-        // by avoiding unnecessary lookups on weeks which an account has zero pending stake.
+        // the corresponding epoch. We use this as a "map", allowing us to reduce gas consumption
+        // by avoiding unnecessary lookups on epochs which an account has zero pending stake.
         //
         // Example: 0100000000000001
-        // The left-most bit represents the final week of pendingStake.
-        // Therefore, we can see that account has stake updates to process only in weeks 15 and 1.
-        uint16 updateWeeksBitmap;
+        // The left-most bit represents the final epoch of pendingStake.
+        // Therefore, we can see that account has stake updates to process only in epochs 15 and 1.
+        uint16 updateEpochBitmap;
     }
 
     enum ApprovalStatus {
@@ -69,14 +69,14 @@ contract BoostedStaker {
 
     event Staked(
         address indexed account,
-        uint256 indexed week,
+        uint256 indexed epoch,
         uint256 amount,
         uint256 newUserWeight,
         uint256 weightAdded
     );
     event Unstaked(
         address indexed account,
-        uint256 indexed week,
+        uint256 indexed epoch,
         uint256 amount,
         uint256 newUserWeight,
         uint256 weightRemoved
@@ -85,33 +85,30 @@ contract BoostedStaker {
 
     /**
         @param _token The token to be staked.
-        @param _max_stake_growth_weeks The number of weeks a stake will grow for.
-                            Not including desposit week.
-        @param _start_time  allows deployer to optionally set a custom start time.
-                            useful if needed to line up with week count in another system.
+        @param stakeGrowthEpochs The number of epochs a stake will grow for
+        @param startTime  allows deployer to optionally set a custom start time.
+                            useful if needed to line up with epoch count in another system.
                             Passing a value of 0 will start at block.timestamp.
     */
     constructor(
         address _token,
-        uint256 _max_stake_growth_weeks,
+        uint256 stakeGrowthEpochs,
         uint256 maxWeightMultiplier,
-        uint256 _start_time,
-        uint256 epoch_days
+        uint256 startTime,
+        uint256 epochDays
     ) {
         FACTORY = IFactory(msg.sender);
         stakeToken = IERC20(_token);
-        require(_max_stake_growth_weeks > 0 && _max_stake_growth_weeks <= 15, "Invalid weeks");
+        require(stakeGrowthEpochs > 0 && stakeGrowthEpochs <= 15, "Invalid STAKE_GROWTH_EPOCHS");
         require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "Invalid MAX_WEIGHT_MULTIPLIER");
-        MAX_STAKE_GROWTH_WEEKS = _max_stake_growth_weeks;
+        STAKE_GROWTH_EPOCHS = stakeGrowthEpochs;
         MAX_WEIGHT_MULTIPLIER = maxWeightMultiplier;
-        MAX_WEEK_BIT = uint16(1 << MAX_STAKE_GROWTH_WEEKS);
-        EPOCH_LENGTH = epoch_days * 1 days;
-        if (_start_time == 0) {
-            START_TIME = block.timestamp;
-        } else {
-            require(_start_time <= block.timestamp, "!Past");
-            START_TIME = _start_time;
-        }
+        MAX_EPOCH_BIT = uint16(1 << STAKE_GROWTH_EPOCHS);
+        EPOCH_LENGTH = epochDays * 1 days;
+
+        if (startTime == 0) startTime = block.timestamp;
+        require(startTime <= block.timestamp, "!Past");
+        START_TIME = startTime;
 
         locksEnabled = true;
     }
@@ -128,26 +125,26 @@ contract BoostedStaker {
         require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
-        uint256 systemWeek = getEpoch();
-        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemWeek);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
+        uint256 systemEpoch = getEpoch();
+        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
+        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
 
         acctData.pendingStake += uint112(_amount);
         globalGrowthRate += uint112(_amount);
 
-        uint256 realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
-        accountWeeklyToRealize[_account][realizeWeek].weight += uint128(_amount);
-        globalWeeklyToRealize[realizeWeek] += uint128(_amount);
+        uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
+        accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
+        globalEpochToRealize[realizeEpoch] += uint128(_amount);
 
-        accountWeeklyWeights[_account][systemWeek] = uint128(accountWeight + _amount);
-        globalWeeklyWeights[systemWeek] = uint128(globalWeight + _amount);
+        accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + _amount);
+        globalEpochWeights[systemEpoch] = uint128(globalWeight + _amount);
 
-        acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
+        acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
         totalSupply += uint120(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemWeek, _amount, accountWeight + _amount, _amount);
+        emit Staked(_account, systemEpoch, _amount, accountWeight + _amount, _amount);
 
         return _amount;
     }
@@ -158,26 +155,26 @@ contract BoostedStaker {
         require(isLockingEnabled(), "Locks are disabled");
 
         // Before going further, let's sync our account and global weights
-        uint256 systemWeek = getEpoch();
-        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemWeek);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
+        uint256 systemEpoch = getEpoch();
+        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
+        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
 
-        uint256 weight = _getWeight(_amount, MAX_STAKE_GROWTH_WEEKS);
+        uint256 weight = _getWeight(_amount, STAKE_GROWTH_EPOCHS);
 
         acctData.lockedStake += uint112(_amount);
 
-        uint256 realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
-        accountWeeklyToRealize[_account][realizeWeek].locked += uint128(_amount);
+        uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
+        accountEpochToRealize[_account][realizeEpoch].locked += uint128(_amount);
 
-        accountWeeklyWeights[_account][systemWeek] = uint128(accountWeight + weight);
-        globalWeeklyWeights[systemWeek] = uint128(globalWeight + weight);
+        accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + weight);
+        globalEpochWeights[systemEpoch] = uint128(globalWeight + weight);
 
-        acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
+        acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
         totalSupply += uint120(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
+        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight);
     }
 
     /**
@@ -192,53 +189,53 @@ contract BoostedStaker {
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.UnstakeOnly, "!Permission");
         }
 
-        uint256 systemWeek = getEpoch();
+        uint256 systemEpoch = getEpoch();
 
         // Before going further, let's sync our account and global weights
-        (AccountData memory acctData, ) = _checkpointAccount(_account, systemWeek);
-        _checkpointGlobal(systemWeek);
+        (AccountData memory acctData, ) = _checkpointAccount(_account, systemEpoch);
+        _checkpointGlobal(systemEpoch);
 
         require(acctData.realizedStake + acctData.pendingStake >= _amount, "Insufficient balance");
 
         // Here we do work to pull from most recent (least weighted) stake first
-        uint16 bitmap = acctData.updateWeeksBitmap;
+        uint16 bitmap = acctData.updateEpochBitmap;
         uint256 weightToRemove;
 
         uint128 amountNeeded = uint128(_amount);
 
         if (bitmap > 0) {
-            for (uint128 weekIndex; weekIndex < MAX_STAKE_GROWTH_WEEKS; ) {
-                // Move right to left, checking each bit if there's an update for corresponding week.
-                uint16 mask = uint16(1 << weekIndex);
+            for (uint128 epochIndex; epochIndex < STAKE_GROWTH_EPOCHS; ) {
+                // Move right to left, checking each bit if there's an update for corresponding epoch.
+                uint16 mask = uint16(1 << epochIndex);
                 if (bitmap & mask == mask) {
-                    uint256 weekToCheck = systemWeek + MAX_STAKE_GROWTH_WEEKS - weekIndex;
-                    uint128 pending = accountWeeklyToRealize[_account][weekToCheck].weight;
+                    uint256 epochToCheck = systemEpoch + STAKE_GROWTH_EPOCHS - epochIndex;
+                    uint128 pending = accountEpochToRealize[_account][epochToCheck].weight;
                     if (amountNeeded > pending) {
-                        weightToRemove += _getWeight(pending, weekIndex);
-                        accountWeeklyToRealize[_account][weekToCheck].weight = 0;
-                        globalWeeklyToRealize[weekToCheck] -= pending;
+                        weightToRemove += _getWeight(pending, epochIndex);
+                        accountEpochToRealize[_account][epochToCheck].weight = 0;
+                        globalEpochToRealize[epochToCheck] -= pending;
                         bitmap = bitmap ^ mask;
                         amountNeeded -= pending;
                     } else {
                         // handle the case where we have more pending than needed
-                        weightToRemove += _getWeight(amountNeeded, weekIndex);
-                        accountWeeklyToRealize[_account][weekToCheck].weight -= amountNeeded;
-                        globalWeeklyToRealize[weekToCheck] -= amountNeeded;
+                        weightToRemove += _getWeight(amountNeeded, epochIndex);
+                        accountEpochToRealize[_account][epochToCheck].weight -= amountNeeded;
+                        globalEpochToRealize[epochToCheck] -= amountNeeded;
                         if (amountNeeded == pending) bitmap = bitmap ^ mask;
                         amountNeeded = 0;
                         break;
                     }
                 }
                 unchecked {
-                    weekIndex++;
+                    epochIndex++;
                 }
             }
-            acctData.updateWeeksBitmap = bitmap;
+            acctData.updateEpochBitmap = bitmap;
         }
 
         uint256 pendingRemoved = _amount - amountNeeded;
         if (amountNeeded > 0) {
-            weightToRemove += _getWeight(amountNeeded, MAX_STAKE_GROWTH_WEEKS);
+            weightToRemove += _getWeight(amountNeeded, STAKE_GROWTH_EPOCHS);
             acctData.realizedStake -= uint112(amountNeeded);
             acctData.pendingStake = 0;
         } else {
@@ -248,13 +245,13 @@ contract BoostedStaker {
         accountData[_account] = acctData;
 
         globalGrowthRate -= uint112(pendingRemoved);
-        globalWeeklyWeights[systemWeek] -= uint128(weightToRemove);
-        uint256 newAccountWeight = accountWeeklyWeights[_account][systemWeek] - weightToRemove;
-        accountWeeklyWeights[_account][systemWeek] = uint128(newAccountWeight);
+        globalEpochWeights[systemEpoch] -= uint128(weightToRemove);
+        uint256 newAccountWeight = accountEpochWeights[_account][systemEpoch] - weightToRemove;
+        accountEpochWeights[_account][systemEpoch] = uint128(newAccountWeight);
 
         totalSupply -= uint120(_amount);
 
-        emit Unstaked(_account, systemWeek, _amount, newAccountWeight, weightToRemove);
+        emit Unstaked(_account, systemEpoch, _amount, newAccountWeight, weightToRemove);
 
         stakeToken.safeTransfer(_receiver, _amount);
     }
@@ -273,31 +270,31 @@ contract BoostedStaker {
     }
 
     /**
-        @notice Checkpoint an account using a specified week limit.
-        @dev    To use in the event that significant number of weeks have passed since last
+        @notice Checkpoint an account using a specified epoch limit.
+        @dev    To use in the event that significant number of epochs have passed since last
                 heckpoint and single call becomes too expensive.
         @param _account Account to checkpoint.
-        @param _week Week which we want to checkpoint to.
+        @param _epoch Epoch which we want to checkpoint to.
         @return acctData Most recent account data written to storage.
-        @return weight Account weight for provided week.
+        @return weight Account weight for provided epoch.
     */
     function checkpointAccountWithLimit(
         address _account,
-        uint256 _week
+        uint256 _epoch
     ) external returns (AccountData memory acctData, uint256 weight) {
-        uint256 systemWeek = getEpoch();
-        if (_week >= systemWeek) _week = systemWeek;
-        (acctData, weight) = _checkpointAccount(_account, _week);
+        uint256 systemEpoch = getEpoch();
+        if (_epoch >= systemEpoch) _epoch = systemEpoch;
+        (acctData, weight) = _checkpointAccount(_account, _epoch);
         accountData[_account] = acctData;
     }
 
     function _checkpointAccount(
         address _account,
-        uint256 _systemWeek
+        uint256 _systemEpoch
     ) internal returns (AccountData memory acctData, uint128 weight) {
         acctData = accountData[_account];
-        uint256 lastUpdateWeek = acctData.lastUpdateWeek;
-        uint128[MAX_WEEKS] storage weekly = accountWeeklyWeights[_account];
+        uint256 lastUpdateEpoch = acctData.lastUpdateEpoch;
+        uint128[MAX_EPOCHS] storage epochWeights = accountEpochWeights[_account];
 
         uint256 pending = acctData.pendingStake;
         uint256 locked = acctData.lockedStake;
@@ -310,74 +307,74 @@ contract BoostedStaker {
             acctData.lockedStake = 0;
         }
 
-        if (_systemWeek == lastUpdateWeek) {
-            return (acctData, weekly[lastUpdateWeek]);
+        if (_systemEpoch == lastUpdateEpoch) {
+            return (acctData, epochWeights[lastUpdateEpoch]);
         }
 
-        require(_systemWeek > lastUpdateWeek, "specified week is older than last update.");
+        require(_systemEpoch > lastUpdateEpoch, "specified epoch is older than last update.");
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
-                weight = weekly[lastUpdateWeek];
-                while (lastUpdateWeek < _systemWeek) {
+                weight = epochWeights[lastUpdateEpoch];
+                while (lastUpdateEpoch < _systemEpoch) {
                     unchecked {
-                        lastUpdateWeek++;
+                        lastUpdateEpoch++;
                     }
-                    // Fill in any missing weeks
-                    weekly[lastUpdateWeek] = weight;
+                    // Fill in any missing epochs
+                    epochWeights[lastUpdateEpoch] = weight;
                 }
             }
-            accountData[_account].lastUpdateWeek = uint16(_systemWeek);
-            acctData.lastUpdateWeek = uint16(_systemWeek);
+            accountData[_account].lastUpdateEpoch = uint16(_systemEpoch);
+            acctData.lastUpdateEpoch = uint16(_systemEpoch);
             return (acctData, weight);
         }
 
-        weight = weekly[lastUpdateWeek];
-        uint16 bitmap = acctData.updateWeeksBitmap;
-        uint256 targetSyncWeek = min(_systemWeek, lastUpdateWeek + MAX_STAKE_GROWTH_WEEKS);
+        weight = epochWeights[lastUpdateEpoch];
+        uint16 bitmap = acctData.updateEpochBitmap;
+        uint256 targetSyncEpoch = min(_systemEpoch, lastUpdateEpoch + STAKE_GROWTH_EPOCHS);
 
-        // Populate data for missed weeks
-        while (lastUpdateWeek < targetSyncWeek) {
+        // Populate data for missed epochs
+        while (lastUpdateEpoch < targetSyncEpoch) {
             unchecked {
-                lastUpdateWeek++;
+                lastUpdateEpoch++;
             }
             weight += _getWeightGrowth(pending, 1);
-            weekly[lastUpdateWeek] = weight;
+            epochWeights[lastUpdateEpoch] = weight;
 
-            // Shift left on bitmap as we pass over each week.
+            // Shift left on bitmap as we pass over each epoch.
             bitmap = bitmap << 1;
-            if (bitmap & MAX_WEEK_BIT == MAX_WEEK_BIT) {
+            if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
                 // If left-most bit is true, we have something to realize; push pending to realized.
                 // Do any updates needed to realize an amount for an account.
-                ToRealize memory weeklyRealized = accountWeeklyToRealize[_account][lastUpdateWeek];
-                pending -= weeklyRealized.weight;
-                realized += weeklyRealized.weight;
+                ToRealize memory epochRealized = accountEpochToRealize[_account][lastUpdateEpoch];
+                pending -= epochRealized.weight;
+                realized += epochRealized.weight;
 
                 if (locked > 0) {
                     // skip if `locked == 0` to avoid issues after disabling locks
-                    locked -= weeklyRealized.locked;
-                    realized += weeklyRealized.locked;
+                    locked -= epochRealized.locked;
+                    realized += epochRealized.locked;
                 }
 
                 if (pending == 0 && locked == 0) break; // All pending has been realized. No need to continue.
             }
         }
 
-        // Fill in any missed weeks.
-        while (lastUpdateWeek < _systemWeek) {
+        // Fill in any missed epochs.
+        while (lastUpdateEpoch < _systemEpoch) {
             unchecked {
-                lastUpdateWeek++;
+                lastUpdateEpoch++;
             }
-            weekly[lastUpdateWeek] = weight;
+            epochWeights[lastUpdateEpoch] = weight;
         }
 
         // Write new account data to storage.
         acctData = AccountData({
-            updateWeeksBitmap: bitmap,
+            updateEpochBitmap: bitmap,
             pendingStake: uint112(pending),
             realizedStake: uint112(realized),
             lockedStake: uint112(locked),
-            lastUpdateWeek: uint16(_systemWeek)
+            lastUpdateEpoch: uint16(_systemEpoch)
         });
     }
 
@@ -389,36 +386,36 @@ contract BoostedStaker {
     }
 
     /**
-        @notice Get the weight for an account in a given week
+        @notice Get the weight for an account in a given epoch
     */
-    function getAccountWeightAt(address _account, uint256 _week) public view returns (uint256) {
-        if (_week > getEpoch()) return 0;
+    function getAccountWeightAt(address _account, uint256 _epoch) public view returns (uint256) {
+        if (_epoch > getEpoch()) return 0;
 
         AccountData memory acctData = accountData[_account];
 
-        uint16 lastUpdateWeek = acctData.lastUpdateWeek;
+        uint16 lastUpdateEpoch = acctData.lastUpdateEpoch;
 
-        if (lastUpdateWeek >= _week) return accountWeeklyWeights[_account][_week];
+        if (lastUpdateEpoch >= _epoch) return accountEpochWeights[_account][_epoch];
 
-        uint256 weight = accountWeeklyWeights[_account][lastUpdateWeek];
+        uint256 weight = accountEpochWeights[_account][lastUpdateEpoch];
 
         uint256 pending = uint256(acctData.pendingStake);
         if (pending == 0) return weight;
 
-        uint16 bitmap = acctData.updateWeeksBitmap;
+        uint16 bitmap = acctData.updateEpochBitmap;
 
-        while (lastUpdateWeek < _week) {
-            // Populate data for missed weeks
+        while (lastUpdateEpoch < _epoch) {
+            // Populate data for missed epochs
             unchecked {
-                lastUpdateWeek++;
+                lastUpdateEpoch++;
             }
             weight += _getWeightGrowth(pending, 1);
 
-            // Our bitmap is used to determine if week has any amount to realize.
+            // Our bitmap is used to determine if epoch has any amount to realize.
             bitmap = bitmap << 1;
-            if (bitmap & MAX_WEEK_BIT == MAX_WEEK_BIT) {
+            if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
                 // If left-most bit is true, we have something to realize; push pending to realized.
-                pending -= accountWeeklyToRealize[_account][lastUpdateWeek].weight;
+                pending -= accountEpochToRealize[_account][lastUpdateEpoch].weight;
                 if (pending == 0) break; // All pending has now been realized, let's exit.
             }
         }
@@ -433,8 +430,8 @@ contract BoostedStaker {
              contract -> contract interactions.
     */
     function checkpointGlobal() external returns (uint256) {
-        uint256 systemWeek = getEpoch();
-        return _checkpointGlobal(systemWeek);
+        uint256 systemEpoch = getEpoch();
+        return _checkpointGlobal(systemEpoch);
     }
 
     /**
@@ -443,71 +440,71 @@ contract BoostedStaker {
              this function over it's `view` counterpart is preferred for
              contract -> contract interactions.
     */
-    function _checkpointGlobal(uint256 systemWeek) internal returns (uint256) {
+    function _checkpointGlobal(uint256 systemEpoch) internal returns (uint256) {
         // These two share a storage slot.
-        uint16 lastUpdateWeek = globalLastUpdateWeek;
+        uint16 lastUpdateEpoch = globalLastUpdateEpoch;
         uint256 rate = globalGrowthRate;
 
-        uint128 weight = globalWeeklyWeights[lastUpdateWeek];
+        uint128 weight = globalEpochWeights[lastUpdateEpoch];
 
         if (weight == 0) {
-            globalLastUpdateWeek = uint16(systemWeek);
+            globalLastUpdateEpoch = uint16(systemEpoch);
             return 0;
         }
 
-        if (lastUpdateWeek == systemWeek) {
+        if (lastUpdateEpoch == systemEpoch) {
             return weight;
         }
 
-        while (lastUpdateWeek < systemWeek) {
+        while (lastUpdateEpoch < systemEpoch) {
             unchecked {
-                lastUpdateWeek++;
+                lastUpdateEpoch++;
             }
             weight += _getWeightGrowth(rate, 1);
-            globalWeeklyWeights[lastUpdateWeek] = weight;
-            rate -= globalWeeklyToRealize[lastUpdateWeek];
+            globalEpochWeights[lastUpdateEpoch] = weight;
+            rate -= globalEpochToRealize[lastUpdateEpoch];
         }
 
         globalGrowthRate = uint112(rate);
-        globalLastUpdateWeek = uint16(systemWeek);
+        globalLastUpdateEpoch = uint16(systemEpoch);
 
         return weight;
     }
 
     /**
-        @notice Get the system weight for current week.
+        @notice Get the system weight for current epoch.
     */
     function getGlobalWeight() external view returns (uint256) {
         return getGlobalWeightAt(getEpoch());
     }
 
     /**
-        @notice Get the system weight for a specified week in the past.
-        @dev querying a week in the future will always return 0.
-        @param week the week number to query global weight for.
+        @notice Get the system weight for a specified epoch in the past.
+        @dev querying a epoch in the future will always return 0.
+        @param epoch the epoch number to query global weight for.
     */
-    function getGlobalWeightAt(uint256 week) public view returns (uint256) {
-        uint256 systemWeek = getEpoch();
-        if (week > systemWeek) return 0;
+    function getGlobalWeightAt(uint256 epoch) public view returns (uint256) {
+        uint256 systemEpoch = getEpoch();
+        if (epoch > systemEpoch) return 0;
 
         // Read these together since they are packed in the same slot.
-        uint16 lastUpdateWeek = globalLastUpdateWeek;
+        uint16 lastUpdateEpoch = globalLastUpdateEpoch;
         uint256 rate = globalGrowthRate;
 
-        if (week <= lastUpdateWeek) return globalWeeklyWeights[week];
+        if (epoch <= lastUpdateEpoch) return globalEpochWeights[epoch];
 
-        uint256 weight = globalWeeklyWeights[lastUpdateWeek];
+        uint256 weight = globalEpochWeights[lastUpdateEpoch];
         if (rate == 0) {
             return weight;
         }
 
-        while (lastUpdateWeek < week) {
+        while (lastUpdateEpoch < epoch) {
             unchecked {
-                lastUpdateWeek++;
+                lastUpdateEpoch++;
             }
 
             weight += _getWeightGrowth(rate, 1);
-            rate -= globalWeeklyToRealize[lastUpdateWeek];
+            rate -= globalEpochToRealize[lastUpdateEpoch];
         }
 
         return weight;
@@ -542,7 +539,7 @@ contract BoostedStaker {
         if (amount > 0) token.safeTransfer(receiver, amount);
     }
 
-    function getEpoch() public view returns (uint256 week) {
+    function getEpoch() public view returns (uint256 epoch) {
         unchecked {
             return (block.timestamp - START_TIME) / EPOCH_LENGTH;
         }
@@ -568,9 +565,9 @@ contract BoostedStaker {
 
     /** @dev The increased weight from `amount` after a number of epochs has passed */
     function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
-        assert(MAX_STAKE_GROWTH_WEEKS >= epochs); // TODO remove me
+        assert(STAKE_GROWTH_EPOCHS >= epochs); // TODO remove me
         amount *= MAX_WEIGHT_MULTIPLIER - 1;
-        return uint128((amount * epochs) / MAX_STAKE_GROWTH_WEEKS);
+        return uint128((amount * epochs) / STAKE_GROWTH_EPOCHS);
     }
 
     /** @dev The total weight of `amount` after a number of epochs has passed */
