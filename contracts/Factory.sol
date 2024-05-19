@@ -17,6 +17,9 @@ contract StakerFactory is Ownable2Step {
 
     bool public isLockingEnabled;
 
+    event BoostedStakerDeployed(address token, address boostedStaker);
+    event LocksDisabled();
+
     constructor(uint256 epochDays, uint256 stakeGrowthEpochs) Ownable(msg.sender) {
         require(stakeGrowthEpochs > 0 && stakeGrowthEpochs < 16, "DFM:BSF STAKE_GROWTH_EPOCHS");
 
@@ -53,6 +56,7 @@ contract StakerFactory is Ownable2Step {
         require(deployedAddress != address(0), "DFM:BSF Deployment failed");
 
         boostedStakers[token] = deployedAddress;
+        emit BoostedStakerDeployed(token, deployedAddress);
         return deployedAddress;
     }
 
@@ -63,5 +67,6 @@ contract StakerFactory is Ownable2Step {
      */
     function disableLocksGlobally() external onlyOwner {
         isLockingEnabled = false;
+        emit LocksDisabled();
     }
 }

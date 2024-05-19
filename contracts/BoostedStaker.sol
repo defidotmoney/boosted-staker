@@ -79,7 +79,8 @@ contract BoostedStaker {
         uint256 indexed epoch,
         uint256 amount,
         uint256 newUserWeight,
-        uint256 weightAdded
+        uint256 weightAdded,
+        bool isLocked
     );
     event Unstaked(
         address indexed account,
@@ -89,6 +90,7 @@ contract BoostedStaker {
         uint256 weightRemoved
     );
     event ApprovedUnstakerSet(address indexed account, address indexed caller, bool isApproved);
+    event LocksDisabled();
 
     /**
         @dev Not intended for direct deployment, use `StakerFactory.deployBoostedStaker`
@@ -472,6 +474,7 @@ contract BoostedStaker {
      */
     function disableLocks() external onlyOwner {
         locksEnabled = false;
+        emit LocksDisabled();
     }
 
     function sweep(IERC20 token, address receiver) external onlyOwner {
@@ -535,7 +538,7 @@ contract BoostedStaker {
         totalSupply += uint120(_amount);
 
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight);
+        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight, isLocked);
     }
 
     function _checkpointAccount(
