@@ -12,16 +12,16 @@ contract BoostedStaker {
     using SafeERC20 for IERC20;
 
     uint256 private constant MAX_WEEKS = 65535;
-    uint public immutable MAX_STAKE_GROWTH_WEEKS;
+    uint256 public immutable MAX_STAKE_GROWTH_WEEKS;
     uint16 public immutable MAX_WEEK_BIT;
-    uint public immutable START_TIME;
-    uint public immutable EPOCH_LENGTH;
+    uint256 public immutable START_TIME;
+    uint256 public immutable EPOCH_LENGTH;
     IERC20 public immutable stakeToken;
 
     // Account weight tracking state vars.
     mapping(address account => AccountData data) public accountData;
     mapping(address account => uint128[MAX_WEEKS]) private accountWeeklyWeights;
-    mapping(address account => mapping(uint week => ToRealize weight)) public accountWeeklyToRealize;
+    mapping(address account => mapping(uint256 week => ToRealize weight)) public accountWeeklyToRealize;
 
     // Global weight tracking stats vars.
     uint128[MAX_WEEKS] private globalWeeklyWeights;
@@ -65,8 +65,20 @@ contract BoostedStaker {
         StakeAndUnstake // 3. Approved for both stake and unstake
     }
 
-    event Staked(address indexed account, uint indexed week, uint amount, uint newUserWeight, uint weightAdded);
-    event Unstaked(address indexed account, uint indexed week, uint amount, uint newUserWeight, uint weightRemoved);
+    event Staked(
+        address indexed account,
+        uint256 indexed week,
+        uint256 amount,
+        uint256 newUserWeight,
+        uint256 weightAdded
+    );
+    event Unstaked(
+        address indexed account,
+        uint256 indexed week,
+        uint256 amount,
+        uint256 newUserWeight,
+        uint256 weightRemoved
+    );
     event ApprovedCallerSet(address indexed account, address indexed caller, ApprovalStatus status);
     event OwnershipTransferred(address indexed newOwner);
 
@@ -79,7 +91,13 @@ contract BoostedStaker {
                             Passing a value of 0 will start at block.timestamp.
         @param _owner       Owner is able to grant access to stake with max boost.
     */
-    constructor(address _token, uint _max_stake_growth_weeks, uint _start_time, uint epoch_days, address _owner) {
+    constructor(
+        address _token,
+        uint256 _max_stake_growth_weeks,
+        uint256 _start_time,
+        uint256 epoch_days,
+        address _owner
+    ) {
         owner = _owner;
         emit OwnershipTransferred(_owner);
         stakeToken = IERC20(_token);
@@ -99,11 +117,11 @@ contract BoostedStaker {
         @notice Stake tokens into the staking contract.
         @param _amount Amount of tokens to stake.
     */
-    function stake(uint _amount) external returns (uint) {
+    function stake(uint256 _amount) external returns (uint256) {
         return _stake(msg.sender, _amount);
     }
 
-    function stakeFor(address _account, uint _amount) external returns (uint) {
+    function stakeFor(address _account, uint256 _amount) external returns (uint256) {
         if (msg.sender != _account) {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.StakeOnly, "!Permission");
@@ -112,18 +130,18 @@ contract BoostedStaker {
         return _stake(_account, _amount);
     }
 
-    function _stake(address _account, uint _amount) internal returns (uint) {
+    function _stake(address _account, uint256 _amount) internal returns (uint256) {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
-        uint systemWeek = getEpoch();
-        (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
+        uint256 systemWeek = getEpoch();
+        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemWeek);
         uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
 
         acctData.pendingStake += uint112(_amount);
         globalGrowthRate += uint112(_amount);
 
-        uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
+        uint256 realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
         accountWeeklyToRealize[_account][realizeWeek].weight += uint128(_amount);
         globalWeeklyToRealize[realizeWeek] += uint128(_amount);
 
@@ -134,26 +152,26 @@ contract BoostedStaker {
         accountData[_account] = acctData;
         totalSupply += uint128(_amount);
 
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
+        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + _amount, _amount);
 
         return _amount;
     }
 
-    function lock(address _account, uint _amount) external {
+    function lock(address _account, uint256 _amount) external {
         // TODO: ACL
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
-        uint systemWeek = getEpoch();
-        (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
+        uint256 systemWeek = getEpoch();
+        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemWeek);
         uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
 
-        uint weight = _getWeight(_amount, MAX_STAKE_GROWTH_WEEKS);
+        uint256 weight = _getWeight(_amount, MAX_STAKE_GROWTH_WEEKS);
 
         acctData.lockedStake += uint112(_amount);
 
-        uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
+        uint256 realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
         accountWeeklyToRealize[_account][realizeWeek].locked += uint128(_amount);
 
         accountWeeklyWeights[_account][systemWeek] = uint128(accountWeight + weight);
@@ -163,7 +181,7 @@ contract BoostedStaker {
         accountData[_account] = acctData;
         totalSupply += uint128(_amount);
 
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
+        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
     }
 
@@ -171,7 +189,7 @@ contract BoostedStaker {
         @notice Unstake tokens from the contract.
         @dev During partial unstake, this will always remove from the least-weighted first.
     */
-    function unstake(uint _amount, address _receiver) external returns (uint) {
+    function unstake(uint256 _amount, address _receiver) external returns (uint256) {
         return _unstake(msg.sender, _amount, _receiver);
     }
 
@@ -179,7 +197,7 @@ contract BoostedStaker {
         @notice Unstake tokens from the contract on behalf of another user.
         @dev During partial unstake, this will always remove from the least-weighted first.
     */
-    function unstakeFor(address _account, uint _amount, address _receiver) external returns (uint) {
+    function unstakeFor(address _account, uint256 _amount, address _receiver) external returns (uint256) {
         if (msg.sender != _account) {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.UnstakeOnly, "!Permission");
@@ -187,9 +205,9 @@ contract BoostedStaker {
         return _unstake(_account, _amount, _receiver);
     }
 
-    function _unstake(address _account, uint _amount, address _receiver) internal returns (uint) {
+    function _unstake(address _account, uint256 _amount, address _receiver) internal returns (uint256) {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
-        uint systemWeek = getEpoch();
+        uint256 systemWeek = getEpoch();
 
         // Before going further, let's sync our account and global weights
         (AccountData memory acctData, ) = _checkpointAccount(_account, systemWeek);
@@ -208,7 +226,7 @@ contract BoostedStaker {
                 // Move right to left, checking each bit if there's an update for corresponding week.
                 uint16 mask = uint16(1 << weekIndex);
                 if (bitmap & mask == mask) {
-                    uint weekToCheck = systemWeek + MAX_STAKE_GROWTH_WEEKS - weekIndex;
+                    uint256 weekToCheck = systemWeek + MAX_STAKE_GROWTH_WEEKS - weekIndex;
                     uint128 pending = accountWeeklyToRealize[_account][weekToCheck].weight;
                     if (amountNeeded > pending) {
                         weightToRemove += _getWeight(pending, weekIndex);
@@ -233,7 +251,7 @@ contract BoostedStaker {
             acctData.updateWeeksBitmap = bitmap;
         }
 
-        uint pendingRemoved = _amount - amountNeeded;
+        uint256 pendingRemoved = _amount - amountNeeded;
         if (amountNeeded > 0) {
             weightToRemove += _getWeight(amountNeeded, MAX_STAKE_GROWTH_WEEKS);
             acctData.realizedStake -= uint112(amountNeeded);
@@ -246,7 +264,7 @@ contract BoostedStaker {
 
         globalGrowthRate -= uint112(pendingRemoved);
         globalWeeklyWeights[systemWeek] -= uint128(weightToRemove);
-        uint newAccountWeight = accountWeeklyWeights[_account][systemWeek] - weightToRemove;
+        uint256 newAccountWeight = accountWeeklyWeights[_account][systemWeek] - weightToRemove;
         accountWeeklyWeights[_account][systemWeek] = uint128(newAccountWeight);
 
         totalSupply -= uint128(_amount);
@@ -266,7 +284,7 @@ contract BoostedStaker {
         @dev Prefer to use this function over it's view counterpart for
              contract -> contract interactions.
     */
-    function checkpointAccount(address _account) external returns (AccountData memory acctData, uint weight) {
+    function checkpointAccount(address _account) external returns (AccountData memory acctData, uint256 weight) {
         (acctData, weight) = _checkpointAccount(_account, getEpoch());
         accountData[_account] = acctData;
     }
@@ -282,9 +300,9 @@ contract BoostedStaker {
     */
     function checkpointAccountWithLimit(
         address _account,
-        uint _week
-    ) external returns (AccountData memory acctData, uint weight) {
-        uint systemWeek = getEpoch();
+        uint256 _week
+    ) external returns (AccountData memory acctData, uint256 weight) {
+        uint256 systemWeek = getEpoch();
         if (_week >= systemWeek) _week = systemWeek;
         (acctData, weight) = _checkpointAccount(_account, _week);
         accountData[_account] = acctData;
@@ -292,10 +310,10 @@ contract BoostedStaker {
 
     function _checkpointAccount(
         address _account,
-        uint _systemWeek
+        uint256 _systemWeek
     ) internal returns (AccountData memory acctData, uint128 weight) {
         acctData = accountData[_account];
-        uint lastUpdateWeek = acctData.lastUpdateWeek;
+        uint256 lastUpdateWeek = acctData.lastUpdateWeek;
         uint128[MAX_WEEKS] storage weekly = accountWeeklyWeights[_account];
 
         if (_systemWeek == lastUpdateWeek) {
@@ -304,9 +322,9 @@ contract BoostedStaker {
 
         require(_systemWeek > lastUpdateWeek, "specified week is older than last update.");
 
-        uint pending = acctData.pendingStake;
-        uint locked = acctData.lockedStake;
-        uint realized = acctData.realizedStake;
+        uint256 pending = acctData.pendingStake;
+        uint256 locked = acctData.lockedStake;
+        uint256 realized = acctData.realizedStake;
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
@@ -326,7 +344,7 @@ contract BoostedStaker {
 
         weight = weekly[lastUpdateWeek];
         uint16 bitmap = acctData.updateWeeksBitmap;
-        uint targetSyncWeek = min(_systemWeek, lastUpdateWeek + MAX_STAKE_GROWTH_WEEKS);
+        uint256 targetSyncWeek = min(_systemWeek, lastUpdateWeek + MAX_STAKE_GROWTH_WEEKS);
 
         // Populate data for missed weeks
         while (lastUpdateWeek < targetSyncWeek) {
@@ -370,14 +388,14 @@ contract BoostedStaker {
     /**
         @notice View function to get the current weight for an account
     */
-    function getAccountWeight(address account) external view returns (uint) {
+    function getAccountWeight(address account) external view returns (uint256) {
         return getAccountWeightAt(account, getEpoch());
     }
 
     /**
         @notice Get the weight for an account in a given week
     */
-    function getAccountWeightAt(address _account, uint _week) public view returns (uint) {
+    function getAccountWeightAt(address _account, uint256 _week) public view returns (uint256) {
         if (_week > getEpoch()) return 0;
 
         AccountData memory acctData = accountData[_account];
@@ -386,9 +404,9 @@ contract BoostedStaker {
 
         if (lastUpdateWeek >= _week) return accountWeeklyWeights[_account][_week];
 
-        uint weight = accountWeeklyWeights[_account][lastUpdateWeek];
+        uint256 weight = accountWeeklyWeights[_account][lastUpdateWeek];
 
-        uint pending = uint(acctData.pendingStake);
+        uint256 pending = uint256(acctData.pendingStake);
         if (pending == 0) return weight;
 
         uint16 bitmap = acctData.updateWeeksBitmap;
@@ -418,8 +436,8 @@ contract BoostedStaker {
              this function over it's `view` counterpart is preferred for
              contract -> contract interactions.
     */
-    function checkpointGlobal() external returns (uint) {
-        uint systemWeek = getEpoch();
+    function checkpointGlobal() external returns (uint256) {
+        uint256 systemWeek = getEpoch();
         return _checkpointGlobal(systemWeek);
     }
 
@@ -429,10 +447,10 @@ contract BoostedStaker {
              this function over it's `view` counterpart is preferred for
              contract -> contract interactions.
     */
-    function _checkpointGlobal(uint systemWeek) internal returns (uint) {
+    function _checkpointGlobal(uint256 systemWeek) internal returns (uint256) {
         // These two share a storage slot.
         uint16 lastUpdateWeek = globalLastUpdateWeek;
-        uint rate = globalGrowthRate;
+        uint256 rate = globalGrowthRate;
 
         uint128 weight = globalWeeklyWeights[lastUpdateWeek];
 
@@ -463,7 +481,7 @@ contract BoostedStaker {
     /**
         @notice Get the system weight for current week.
     */
-    function getGlobalWeight() external view returns (uint) {
+    function getGlobalWeight() external view returns (uint256) {
         return getGlobalWeightAt(getEpoch());
     }
 
@@ -472,17 +490,17 @@ contract BoostedStaker {
         @dev querying a week in the future will always return 0.
         @param week the week number to query global weight for.
     */
-    function getGlobalWeightAt(uint week) public view returns (uint) {
-        uint systemWeek = getEpoch();
+    function getGlobalWeightAt(uint256 week) public view returns (uint256) {
+        uint256 systemWeek = getEpoch();
         if (week > systemWeek) return 0;
 
         // Read these together since they are packed in the same slot.
         uint16 lastUpdateWeek = globalLastUpdateWeek;
-        uint rate = globalGrowthRate;
+        uint256 rate = globalGrowthRate;
 
         if (week <= lastUpdateWeek) return globalWeeklyWeights[week];
 
-        uint weight = globalWeeklyWeights[lastUpdateWeek];
+        uint256 weight = globalWeeklyWeights[lastUpdateWeek];
         if (rate == 0) {
             return weight;
         }
@@ -504,7 +522,7 @@ contract BoostedStaker {
         @param _account Account to query balance.
         @return balance of account.
     */
-    function balanceOf(address _account) external view returns (uint) {
+    function balanceOf(address _account) external view returns (uint256) {
         AccountData memory acctData = accountData[_account];
         return (acctData.pendingStake + acctData.realizedStake + acctData.lockedStake);
     }
@@ -540,20 +558,20 @@ contract BoostedStaker {
 
     function sweep(address _token) external {
         require(msg.sender == owner, "!authorized");
-        uint amount = IERC20(_token).balanceOf(address(this));
+        uint256 amount = IERC20(_token).balanceOf(address(this));
         if (_token == address(stakeToken)) {
             amount = amount - totalSupply;
         }
         if (amount > 0) IERC20(_token).safeTransfer(owner, amount);
     }
 
-    function getEpoch() public view returns (uint week) {
+    function getEpoch() public view returns (uint256 week) {
         unchecked {
             return (block.timestamp - START_TIME) / EPOCH_LENGTH;
         }
     }
 
-    function min(uint a, uint b) internal pure returns (uint) {
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
     }
 
