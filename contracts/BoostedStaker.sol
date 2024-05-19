@@ -37,7 +37,6 @@ contract BoostedStaker {
     mapping(address account => mapping(address caller => ApprovalStatus approvalStatus)) public approvedCaller;
 
     struct ToRealize {
-        uint128 weightPersistent;
         uint128 weight;
     }
 
@@ -126,12 +125,10 @@ contract BoostedStaker {
         uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
         ToRealize memory toRealize = accountWeeklyToRealize[_account][realizeWeek];
         toRealize.weight += uint128(weight);
-        toRealize.weightPersistent += uint128(weight);
         accountWeeklyToRealize[_account][realizeWeek] = toRealize;
 
         toRealize = globalWeeklyToRealize[realizeWeek];
         toRealize.weight += uint128(weight);
-        toRealize.weightPersistent += uint128(weight);
         globalWeeklyToRealize[realizeWeek] = toRealize;
 
         accountWeeklyWeights[_account][systemWeek] = accountWeight + weight;
@@ -192,11 +189,6 @@ contract BoostedStaker {
                         weightToRemove += _getWeight(pending, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight = 0;
                         globalWeeklyToRealize[weekToCheck].weight -= pending;
-                        if (weekIndex == 0) {
-                            // Current system week
-                            accountWeeklyToRealize[_account][weekToCheck].weightPersistent = 0;
-                            globalWeeklyToRealize[weekToCheck].weightPersistent -= pending;
-                        }
                         bitmap = bitmap ^ mask;
                         amountNeeded -= pending;
                     } else {
@@ -204,11 +196,6 @@ contract BoostedStaker {
                         weightToRemove += _getWeight(amountNeeded, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight -= amountNeeded;
                         globalWeeklyToRealize[weekToCheck].weight -= amountNeeded;
-                        if (weekIndex == 0) {
-                            // Current system week
-                            accountWeeklyToRealize[_account][weekToCheck].weightPersistent -= amountNeeded;
-                            globalWeeklyToRealize[weekToCheck].weightPersistent -= amountNeeded;
-                        }
                         if (amountNeeded == pending) bitmap = bitmap ^ mask;
                         amountNeeded = 0;
                         break;
