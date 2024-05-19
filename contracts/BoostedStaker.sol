@@ -13,18 +13,20 @@ contract BoostedStaker {
     using SafeERC20 for IERC20;
 
     uint256 private constant MAX_EPOCHS = 65535;
+    uint16 private immutable MAX_EPOCH_BIT;
     uint256 public immutable STAKE_GROWTH_EPOCHS;
     uint256 public immutable MAX_WEIGHT_MULTIPLIER;
-    uint16 public immutable MAX_EPOCH_BIT;
     uint256 public immutable START_TIME;
     uint256 public immutable EPOCH_LENGTH;
-    IERC20 public immutable stakeToken;
+    IERC20 public immutable STAKE_TOKEN;
     IFactory public immutable FACTORY;
 
     // Account weight tracking state vars.
-    mapping(address account => AccountData data) public accountData;
+    mapping(address account => AccountData data) private accountData;
     mapping(address account => uint128[MAX_EPOCHS]) private accountEpochWeights;
-    mapping(address account => ToRealize[MAX_EPOCHS] weight) public accountEpochToRealize;
+    mapping(address account => ToRealize[MAX_EPOCHS] weight) private accountEpochToRealize;
+
+    mapping(address account => mapping(address caller => bool approvalStatus)) public isApprovedUnstaker;
 
     // Global weight tracking stats vars.
     uint128[MAX_EPOCHS] private globalEpochWeights;
@@ -36,18 +38,10 @@ contract BoostedStaker {
 
     bool private locksEnabled;
 
-    // Permissioned roles
-    mapping(address account => mapping(address caller => bool approvalStatus)) public isApprovedUnstaker;
-
-    struct ToRealize {
-        uint128 weight;
-        uint128 locked;
-    }
-
     struct AccountData {
         uint112 realizedStake; // Amount of stake that has fully realized weight.
         uint112 pendingStake; // Amount of stake that has not yet fully realized weight.
-        uint112 lockedStake;
+        uint112 lockedStake; // Amount of stake that has fully realized weight, but cannot be withdrawn.
         uint16 lastUpdateEpoch; // Epoch of last sync.
         // One byte member to represent epochs in which an account has pending weight changes.
         // A bit is set to true when the account has a non-zero token balance to be realized in
@@ -58,6 +52,11 @@ contract BoostedStaker {
         // The left-most bit represents the final epoch of pendingStake.
         // Therefore, we can see that account has stake updates to process only in epochs 15 and 1.
         uint16 updateEpochBitmap;
+    }
+
+    struct ToRealize {
+        uint128 pending;
+        uint128 locked;
     }
 
     struct AccountView {
@@ -92,30 +91,21 @@ contract BoostedStaker {
     event ApprovedUnstakerSet(address indexed account, address indexed caller, bool isApproved);
 
     /**
-        @param _token The token to be staked.
-        @param stakeGrowthEpochs The number of epochs a stake will grow for
-        @param startTime  allows deployer to optionally set a custom start time.
-                            useful if needed to line up with epoch count in another system.
-                            Passing a value of 0 will start at block.timestamp.
+        @dev Not intended for direct deployment, use `StakerFactory.deployBoostedStaker`
     */
     constructor(
-        address _token,
+        IERC20 token,
         uint256 stakeGrowthEpochs,
         uint256 maxWeightMultiplier,
         uint256 startTime,
         uint256 epochDays
     ) {
         FACTORY = IFactory(msg.sender);
-        stakeToken = IERC20(_token);
-        require(stakeGrowthEpochs > 0 && stakeGrowthEpochs <= 15, "Invalid STAKE_GROWTH_EPOCHS");
-        require(maxWeightMultiplier > 1 && maxWeightMultiplier < 256, "Invalid MAX_WEIGHT_MULTIPLIER");
+        STAKE_TOKEN = token;
         STAKE_GROWTH_EPOCHS = stakeGrowthEpochs;
         MAX_WEIGHT_MULTIPLIER = maxWeightMultiplier;
         MAX_EPOCH_BIT = uint16(1 << STAKE_GROWTH_EPOCHS);
         EPOCH_LENGTH = epochDays * 1 days;
-
-        if (startTime == 0) startTime = block.timestamp;
-        require(startTime <= block.timestamp, "!Past");
         START_TIME = startTime;
 
         locksEnabled = true;
@@ -186,7 +176,7 @@ contract BoostedStaker {
             bitmap = bitmap << 1;
             if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
                 // If left-most bit is true, we have something to realize; push pending to realized.
-                pending -= accountEpochToRealize[_account][lastUpdateEpoch].weight;
+                pending -= accountEpochToRealize[_account][lastUpdateEpoch].pending;
                 if (pending == 0) break; // All pending has now been realized, let's exit.
             }
         }
@@ -244,8 +234,8 @@ contract BoostedStaker {
                     // If left-most bit is true, we have something to realize; push pending to realized.
                     // Do any updates needed to realize an amount for an account.
                     ToRealize memory epochRealized = accountEpochToRealize[account][lastUpdateEpoch];
-                    accountView.pendingStake -= epochRealized.weight;
-                    accountView.realizedStake += epochRealized.weight;
+                    accountView.pendingStake -= epochRealized.pending;
+                    accountView.realizedStake += epochRealized.pending;
 
                     if (accountView.lockedStake > 0) {
                         // skip if `locked == 0` to avoid issues after disabling locks
@@ -265,12 +255,12 @@ contract BoostedStaker {
                 bitmap = bitmap << 1;
                 if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
                     ToRealize memory epochRealized = accountEpochToRealize[account][lastUpdateEpoch];
-                    futureRealizedStake[length] = FutureRealizedStake(
-                        lastUpdateEpoch - systemEpoch,
-                        START_TIME + (lastUpdateEpoch * EPOCH_LENGTH),
-                        epochRealized.weight,
-                        epochRealized.locked
-                    );
+                    futureRealizedStake[length] = FutureRealizedStake({
+                        epochsToMaturity: lastUpdateEpoch - systemEpoch,
+                        timestampAtMaturity: START_TIME + (lastUpdateEpoch * EPOCH_LENGTH),
+                        pendingStake: epochRealized.pending,
+                        lockedStake: epochRealized.locked
+                    });
                     length++;
                 }
             }
@@ -341,14 +331,21 @@ contract BoostedStaker {
         _stake(_account, _amount, false);
     }
 
+    /**
+        @notice Lock tokens in the staking contract.
+        @dev Locked tokens receive maximum boost immediately, but cannot be
+             withdrawn until `STAKE_GROWTH_EPOCHS` have passed. The only
+             exception is if the contract owner disables locks.
+        @param _amount Amount of tokens to lock.
+    */
     function lock(address _account, uint256 _amount) external {
         require(isLockingEnabled(), "Locks are disabled");
         _stake(_account, _amount, true);
     }
 
     /**
-        @notice Unstake tokens from the contract on behalf of another user.
-        @dev During partial unstake, this will always remove from the least-weighted first.
+        @notice Unstake tokens from the contract.
+        @dev In a partial restake, tokens giving the least weight are withdrawn first.
     */
     function unstake(address _account, uint256 _amount, address _receiver) external {
         require(_amount > 0, "Cannot unstake 0");
@@ -357,9 +354,8 @@ contract BoostedStaker {
             require(isApprovedUnstaker[_account][msg.sender], "Not approved unstaker");
         }
 
-        uint256 systemEpoch = getEpoch();
-
         // Before going further, let's sync our account and global weights
+        uint256 systemEpoch = getEpoch();
         (AccountData memory acctData, ) = _checkpointAccount(_account, systemEpoch);
         _checkpointGlobal(systemEpoch);
 
@@ -378,17 +374,17 @@ contract BoostedStaker {
                 uint16 mask = uint16(1 << epochIndex);
                 if (bitmap & mask == mask) {
                     uint256 epochToCheck = systemEpoch + STAKE_GROWTH_EPOCHS - epochIndex;
-                    uint128 pending = epochToRealize[epochToCheck].weight;
+                    uint128 pending = epochToRealize[epochToCheck].pending;
                     if (amountNeeded > pending) {
                         weightToRemove += _getWeight(pending, epochIndex);
-                        epochToRealize[epochToCheck].weight = 0;
+                        epochToRealize[epochToCheck].pending = 0;
                         globalEpochToRealize[epochToCheck] -= pending;
                         bitmap = bitmap ^ mask;
                         amountNeeded -= pending;
                     } else {
                         // handle the case where we have more pending than needed
                         weightToRemove += _getWeight(amountNeeded, epochIndex);
-                        epochToRealize[epochToCheck].weight -= amountNeeded;
+                        epochToRealize[epochToCheck].pending -= amountNeeded;
                         globalEpochToRealize[epochToCheck] -= amountNeeded;
                         if (amountNeeded == pending) bitmap = bitmap ^ mask;
                         amountNeeded = 0;
@@ -422,20 +418,22 @@ contract BoostedStaker {
 
         emit Unstaked(_account, systemEpoch, _amount, newAccountWeight, weightToRemove);
 
-        stakeToken.safeTransfer(_receiver, _amount);
+        STAKE_TOKEN.safeTransfer(_receiver, _amount);
     }
 
     /**
-        @notice Get the current realized weight for an account
-        @param _account Account to checkpoint.
-        @return acctData Most recent account data written to storage.
-        @return weight Most current account weight.
+        @notice Checkpoint an account and get the account's current weight
         @dev Prefer to use this function over it's view counterpart for
              contract -> contract interactions.
+        @param _account Account to checkpoint.
+        @return weight Most current account weight.
+
     */
-    function checkpointAccount(address _account) external returns (AccountData memory acctData, uint256 weight) {
+    function checkpointAccount(address _account) external returns (uint256 weight) {
+        AccountData memory acctData;
         (acctData, weight) = _checkpointAccount(_account, getEpoch());
         accountData[_account] = acctData;
+        return weight;
     }
 
     /**
@@ -444,17 +442,15 @@ contract BoostedStaker {
                 heckpoint and single call becomes too expensive.
         @param _account Account to checkpoint.
         @param _epoch Epoch which we want to checkpoint to.
-        @return acctData Most recent account data written to storage.
         @return weight Account weight for provided epoch.
     */
-    function checkpointAccountWithLimit(
-        address _account,
-        uint256 _epoch
-    ) external returns (AccountData memory acctData, uint256 weight) {
+    function checkpointAccountWithLimit(address _account, uint256 _epoch) external returns (uint256 weight) {
         uint256 systemEpoch = getEpoch();
         if (_epoch >= systemEpoch) _epoch = systemEpoch;
+        AccountData memory acctData;
         (acctData, weight) = _checkpointAccount(_account, _epoch);
         accountData[_account] = acctData;
+        return weight;
     }
 
     /**
@@ -480,7 +476,7 @@ contract BoostedStaker {
 
     function sweep(IERC20 token, address receiver) external onlyOwner {
         uint256 amount = token.balanceOf(address(this));
-        if (token == stakeToken) {
+        if (token == STAKE_TOKEN) {
             amount = amount - totalSupply;
         }
         if (amount > 0) token.safeTransfer(receiver, amount);
@@ -526,7 +522,7 @@ contract BoostedStaker {
             acctData.pendingStake += uint112(_amount);
             globalGrowthRate += uint112(_amount);
 
-            accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
+            accountEpochToRealize[_account][realizeEpoch].pending += uint128(_amount);
             globalEpochToRealize[realizeEpoch] += uint128(_amount);
         }
 
@@ -537,7 +533,7 @@ contract BoostedStaker {
         accountData[_account] = acctData;
         totalSupply += uint120(_amount);
 
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
+        STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight);
     }
 
@@ -600,8 +596,8 @@ contract BoostedStaker {
                 // If left-most bit is true, we have something to realize; push pending to realized.
                 // Do any updates needed to realize an amount for an account.
                 ToRealize memory epochRealized = accountEpochToRealize[_account][lastUpdateEpoch];
-                pending -= epochRealized.weight;
-                realized += epochRealized.weight;
+                pending -= epochRealized.pending;
+                realized += epochRealized.pending;
 
                 if (locked > 0) {
                     // skip if `locked == 0` to avoid issues after disabling locks
@@ -631,12 +627,6 @@ contract BoostedStaker {
         });
     }
 
-    /**
-        @notice Get the current total system weight
-        @dev Also updates local storage values for total weights. Using
-             this function over it's `view` counterpart is preferred for
-             contract -> contract interactions.
-    */
     function _checkpointGlobal(uint256 systemEpoch) internal returns (uint256) {
         // These two share a storage slot.
         uint16 lastUpdateEpoch = globalLastUpdateEpoch;
