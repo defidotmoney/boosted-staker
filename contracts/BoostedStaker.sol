@@ -26,7 +26,7 @@ contract BoostedStaker {
     uint112 public globalGrowthRate;
     uint16 public globalLastUpdateWeek;
     mapping(uint week => uint weight) private globalWeeklyWeights;
-    mapping(uint week => ToRealize weight) public globalWeeklyToRealize;
+    mapping(uint week => uint weight) public globalWeeklyToRealize;
 
     // Generic token interface.
     uint public totalSupply;
@@ -117,29 +117,22 @@ contract BoostedStaker {
         (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
         uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
 
-        uint weight = _amount;
-
-        acctData.pendingStake += uint112(weight);
-        globalGrowthRate += uint112(weight);
+        acctData.pendingStake += uint112(_amount);
+        globalGrowthRate += uint112(_amount);
 
         uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
-        ToRealize memory toRealize = accountWeeklyToRealize[_account][realizeWeek];
-        toRealize.weight += uint128(weight);
-        accountWeeklyToRealize[_account][realizeWeek] = toRealize;
+        accountWeeklyToRealize[_account][realizeWeek].weight += uint128(_amount);
+        globalWeeklyToRealize[realizeWeek] += uint128(_amount);
 
-        toRealize = globalWeeklyToRealize[realizeWeek];
-        toRealize.weight += uint128(weight);
-        globalWeeklyToRealize[realizeWeek] = toRealize;
-
-        accountWeeklyWeights[_account][systemWeek] = accountWeight + weight;
-        globalWeeklyWeights[systemWeek] = globalWeight + weight;
+        accountWeeklyWeights[_account][systemWeek] = accountWeight + _amount;
+        globalWeeklyWeights[systemWeek] = globalWeight + _amount;
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
         totalSupply += _amount;
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
-        emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
+        emit Staked(_account, systemWeek, _amount, accountWeight + _amount, _amount);
 
         return _amount;
     }
@@ -188,14 +181,14 @@ contract BoostedStaker {
                     if (amountNeeded > pending) {
                         weightToRemove += _getWeight(pending, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight = 0;
-                        globalWeeklyToRealize[weekToCheck].weight -= pending;
+                        globalWeeklyToRealize[weekToCheck] -= pending;
                         bitmap = bitmap ^ mask;
                         amountNeeded -= pending;
                     } else {
                         // handle the case where we have more pending than needed
                         weightToRemove += _getWeight(amountNeeded, weekIndex);
                         accountWeeklyToRealize[_account][weekToCheck].weight -= amountNeeded;
-                        globalWeeklyToRealize[weekToCheck].weight -= amountNeeded;
+                        globalWeeklyToRealize[weekToCheck] -= amountNeeded;
                         if (amountNeeded == pending) bitmap = bitmap ^ mask;
                         amountNeeded = 0;
                         break;
@@ -422,7 +415,7 @@ contract BoostedStaker {
             }
             weight = _applyGrowthFactor(weight, rate);
             globalWeeklyWeights[lastUpdateWeek] = weight;
-            rate -= globalWeeklyToRealize[lastUpdateWeek].weight;
+            rate -= globalWeeklyToRealize[lastUpdateWeek];
         }
 
         globalGrowthRate = uint112(rate);
@@ -463,7 +456,7 @@ contract BoostedStaker {
                 lastUpdateWeek++;
             }
             weight = _applyGrowthFactor(weight, rate);
-            rate -= globalWeeklyToRealize[lastUpdateWeek].weight;
+            rate -= globalWeeklyToRealize[lastUpdateWeek];
         }
 
         return weight;
