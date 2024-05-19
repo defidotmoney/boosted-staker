@@ -38,11 +38,13 @@ contract BoostedStaker {
 
     struct ToRealize {
         uint128 weight;
+        uint128 locked;
     }
 
     struct AccountData {
         uint112 realizedStake; // Amount of stake that has fully realized weight.
         uint112 pendingStake; // Amount of stake that has not yet fully realized weight.
+        uint112 lockedStake;
         uint16 lastUpdateWeek; // Week of last sync.
         // One byte member to represent weeks in which an account has pending weight changes.
         // A bit is set to true when the account has a non-zero token balance to be realized in
@@ -137,6 +139,33 @@ contract BoostedStaker {
         return _amount;
     }
 
+    function lock(address _account, uint _amount) external {
+        // TODO: ACL
+        require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
+
+        // Before going further, let's sync our account and global weights
+        uint systemWeek = getEpoch();
+        (AccountData memory acctData, uint accountWeight) = _checkpointAccount(_account, systemWeek);
+        uint112 globalWeight = uint112(_checkpointGlobal(systemWeek));
+
+        uint weight = _getWeight(_amount, MAX_STAKE_GROWTH_WEEKS);
+
+        acctData.lockedStake += uint112(_amount);
+
+        uint realizeWeek = systemWeek + MAX_STAKE_GROWTH_WEEKS;
+        accountWeeklyToRealize[_account][realizeWeek].locked += uint128(_amount);
+
+        accountWeeklyWeights[_account][systemWeek] = accountWeight + weight;
+        globalWeeklyWeights[systemWeek] = globalWeight + weight;
+
+        acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
+        accountData[_account] = acctData;
+        totalSupply += _amount;
+
+        stakeToken.safeTransferFrom(msg.sender, address(this), uint(_amount));
+        emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
+    }
+
     /**
         @notice Unstake tokens from the contract.
         @dev During partial unstake, this will always remove from the least-weighted first.
@@ -164,6 +193,8 @@ contract BoostedStaker {
         // Before going further, let's sync our account and global weights
         (AccountData memory acctData, ) = _checkpointAccount(_account, systemWeek);
         _checkpointGlobal(systemWeek);
+
+        require(acctData.realizedStake + acctData.pendingStake >= _amount, "Insufficient balance");
 
         // Here we do work to pull from most recent (least weighted) stake first
         uint16 bitmap = acctData.updateWeeksBitmap;
@@ -271,10 +302,11 @@ contract BoostedStaker {
 
         require(_systemWeek > lastUpdateWeek, "specified week is older than last update.");
 
-        uint pending = uint(acctData.pendingStake);
+        uint pending = acctData.pendingStake;
+        uint locked = acctData.lockedStake;
         uint realized = acctData.realizedStake;
 
-        if (pending == 0) {
+        if (pending == 0 && locked == 0) {
             if (realized != 0) {
                 weight = accountWeeklyWeights[_account][lastUpdateWeek];
                 while (lastUpdateWeek < _systemWeek) {
@@ -307,10 +339,11 @@ contract BoostedStaker {
             if (bitmap & MAX_WEEK_BIT == MAX_WEEK_BIT) {
                 // If left-most bit is true, we have something to realize; push pending to realized.
                 // Do any updates needed to realize an amount for an account.
-                uint toRealize = accountWeeklyToRealize[_account][lastUpdateWeek].weight;
-                pending -= toRealize;
-                realized += toRealize;
-                if (pending == 0) break; // All pending has been realized. No need to continue.
+                ToRealize memory weeklyRealized = accountWeeklyToRealize[_account][lastUpdateWeek];
+                pending -= weeklyRealized.weight;
+                locked -= weeklyRealized.locked;
+                realized += weeklyRealized.weight + weeklyRealized.locked;
+                if (pending == 0 && locked == 0) break; // All pending has been realized. No need to continue.
             }
         }
 
@@ -327,6 +360,7 @@ contract BoostedStaker {
             updateWeeksBitmap: bitmap,
             pendingStake: uint112(pending),
             realizedStake: uint112(realized),
+            lockedStake: uint112(locked),
             lastUpdateWeek: uint16(_systemWeek)
         });
     }
@@ -469,7 +503,7 @@ contract BoostedStaker {
     */
     function balanceOf(address _account) external view returns (uint) {
         AccountData memory acctData = accountData[_account];
-        return (acctData.pendingStake + acctData.realizedStake);
+        return (acctData.pendingStake + acctData.realizedStake + acctData.lockedStake);
     }
 
     /**

@@ -1,5 +1,6 @@
 import pytest
 
+import brownie
 from brownie import chain
 
 
@@ -48,3 +49,22 @@ def test_weight_adjustments_with_checkpoint(staker, alice, unstake_week):
             assert staker.getAccountWeight(alice) == 0
             assert staker.getGlobalWeight() == 0
             assert staker.balanceOf(alice) == 0
+
+
+def test_lock(staker, alice):
+    staker.lock(alice, 10**18, {"from": alice})
+
+    for i in range(10):
+        with brownie.reverts("Insufficient balance"):
+            staker.unstake(10**18, alice, {"from": alice})
+
+        assert staker.getAccountWeight(alice) == 2 * 10**18
+        assert staker.getGlobalWeight() == 2 * 10**18
+        assert staker.balanceOf(alice) == 10**18
+        chain.mine(timedelta=staker.EPOCH_LENGTH() + 1)
+
+    staker.unstake(10**18, alice, {"from": alice})
+
+    assert staker.getAccountWeight(alice) == 0
+    assert staker.getGlobalWeight() == 0
+    assert staker.balanceOf(alice) == 0
