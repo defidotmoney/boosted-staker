@@ -30,5 +30,5 @@ def token():
 @pytest.fixture(scope="module")
 def staker(BoostedStaker, token, deployer):
     return BoostedStaker.deploy(
-        token, MAX_GROWTH_EPOCHS, MAX_WEIGHT_MULTIPLIER, 0, EPOCH_DAYS, deployer, {"from": deployer}
+        token, MAX_GROWTH_EPOCHS, MAX_WEIGHT_MULTIPLIER, 0, EPOCH_DAYS, {"from": deployer}
     )

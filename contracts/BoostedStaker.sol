@@ -117,20 +117,11 @@ contract BoostedStaker {
         @notice Stake tokens into the staking contract.
         @param _amount Amount of tokens to stake.
     */
-    function stake(uint256 _amount) external returns (uint256) {
-        return _stake(msg.sender, _amount);
-    }
-
-    function stakeFor(address _account, uint256 _amount) external returns (uint256) {
+    function stake(address _account, uint256 _amount) external returns (uint256) {
         if (msg.sender != _account) {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.StakeOnly, "!Permission");
         }
-
-        return _stake(_account, _amount);
-    }
-
-    function _stake(address _account, uint256 _amount) internal returns (uint256) {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
@@ -186,26 +177,14 @@ contract BoostedStaker {
     }
 
     /**
-        @notice Unstake tokens from the contract.
-        @dev During partial unstake, this will always remove from the least-weighted first.
-    */
-    function unstake(uint256 _amount, address _receiver) external returns (uint256) {
-        return _unstake(msg.sender, _amount, _receiver);
-    }
-
-    /**
         @notice Unstake tokens from the contract on behalf of another user.
         @dev During partial unstake, this will always remove from the least-weighted first.
     */
-    function unstakeFor(address _account, uint256 _amount, address _receiver) external returns (uint256) {
+    function unstake(address _account, uint256 _amount, address _receiver) external returns (uint256) {
         if (msg.sender != _account) {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.UnstakeOnly, "!Permission");
         }
-        return _unstake(_account, _amount, _receiver);
-    }
-
-    function _unstake(address _account, uint256 _amount, address _receiver) internal returns (uint256) {
         require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
         uint256 systemWeek = getEpoch();
 
