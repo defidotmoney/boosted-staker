@@ -377,20 +377,22 @@ contract BoostedStaker {
                 if (bitmap & mask == mask) {
                     uint256 epochToCheck = systemEpoch + STAKE_GROWTH_EPOCHS - epochIndex;
                     uint128 pending = epochToRealize[epochToCheck].pending;
-                    if (amountNeeded > pending) {
-                        weightToRemove += _getWeight(pending, epochIndex);
-                        epochToRealize[epochToCheck].pending = 0;
-                        globalEpochToRealize[epochToCheck] -= pending;
-                        bitmap = bitmap ^ mask;
-                        amountNeeded -= pending;
-                    } else {
-                        // handle the case where we have more pending than needed
-                        weightToRemove += _getWeight(amountNeeded, epochIndex);
-                        epochToRealize[epochToCheck].pending -= amountNeeded;
-                        globalEpochToRealize[epochToCheck] -= amountNeeded;
-                        if (amountNeeded == pending) bitmap = bitmap ^ mask;
-                        amountNeeded = 0;
-                        break;
+                    if (pending > 0) {
+                        if (amountNeeded > pending) {
+                            weightToRemove += _getWeight(pending, epochIndex);
+                            epochToRealize[epochToCheck].pending = 0;
+                            globalEpochToRealize[epochToCheck] -= pending;
+                            amountNeeded -= pending;
+                            if (epochToRealize[epochToCheck].locked == 0) bitmap = bitmap ^ mask;
+                        } else {
+                            // handle the case where we have more pending than needed
+                            weightToRemove += _getWeight(amountNeeded, epochIndex);
+                            epochToRealize[epochToCheck].pending -= amountNeeded;
+                            globalEpochToRealize[epochToCheck] -= amountNeeded;
+                            if (amountNeeded == pending) bitmap = bitmap ^ mask;
+                            amountNeeded = 0;
+                            break;
+                        }
                     }
                 }
                 unchecked {
