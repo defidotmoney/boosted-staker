@@ -106,6 +106,131 @@ contract BoostedStaker {
         locksEnabled = true;
     }
 
+    modifier onlyOwner() {
+        require(msg.sender == FACTORY.owner(), "!authorized");
+        _;
+    }
+
+    /// ----- External view functions -----
+
+    function getEpoch() public view returns (uint256 epoch) {
+        unchecked {
+            return (block.timestamp - START_TIME) / EPOCH_LENGTH;
+        }
+    }
+
+    function isLockingEnabled() public view returns (bool) {
+        if (!locksEnabled) return false;
+        return FACTORY.isLockingEnabled();
+    }
+
+    /**
+        @notice Returns the balance of underlying staked tokens for an account
+        @param _account Account to query balance.
+        @return balance of account.
+    */
+    function balanceOf(address _account) external view returns (uint256) {
+        AccountData memory acctData = accountData[_account];
+        return (acctData.pendingStake + acctData.realizedStake + acctData.lockedStake);
+    }
+
+    /**
+        @notice View function to get the current weight for an account
+    */
+    function getAccountWeight(address account) external view returns (uint256) {
+        return getAccountWeightAt(account, getEpoch());
+    }
+
+    /**
+        @notice Get the weight for an account in a given epoch
+    */
+    function getAccountWeightAt(address _account, uint256 _epoch) public view returns (uint256) {
+        if (_epoch > getEpoch()) return 0;
+
+        AccountData memory acctData = accountData[_account];
+
+        uint16 lastUpdateEpoch = acctData.lastUpdateEpoch;
+
+        if (lastUpdateEpoch >= _epoch) return accountEpochWeights[_account][_epoch];
+
+        uint256 weight = accountEpochWeights[_account][lastUpdateEpoch];
+
+        uint256 pending = uint256(acctData.pendingStake);
+        if (pending == 0) return weight;
+
+        uint16 bitmap = acctData.updateEpochBitmap;
+
+        while (lastUpdateEpoch < _epoch) {
+            // Populate data for missed epochs
+            unchecked {
+                lastUpdateEpoch++;
+            }
+            weight += _getWeightGrowth(pending, 1);
+
+            // Our bitmap is used to determine if epoch has any amount to realize.
+            bitmap = bitmap << 1;
+            if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
+                // If left-most bit is true, we have something to realize; push pending to realized.
+                pending -= accountEpochToRealize[_account][lastUpdateEpoch].weight;
+                if (pending == 0) break; // All pending has now been realized, let's exit.
+            }
+        }
+
+        return weight;
+    }
+
+    /**
+        @notice Get the system weight for current epoch.
+    */
+    function getGlobalWeight() external view returns (uint256) {
+        return getGlobalWeightAt(getEpoch());
+    }
+
+    /**
+        @notice Get the system weight for a specified epoch in the past.
+        @dev querying a epoch in the future will always return 0.
+        @param epoch the epoch number to query global weight for.
+    */
+    function getGlobalWeightAt(uint256 epoch) public view returns (uint256) {
+        uint256 systemEpoch = getEpoch();
+        if (epoch > systemEpoch) return 0;
+
+        // Read these together since they are packed in the same slot.
+        uint16 lastUpdateEpoch = globalLastUpdateEpoch;
+        uint256 rate = globalGrowthRate;
+
+        if (epoch <= lastUpdateEpoch) return globalEpochWeights[epoch];
+
+        uint256 weight = globalEpochWeights[lastUpdateEpoch];
+        if (rate == 0) {
+            return weight;
+        }
+
+        while (lastUpdateEpoch < epoch) {
+            unchecked {
+                lastUpdateEpoch++;
+            }
+
+            weight += _getWeightGrowth(rate, 1);
+            rate -= globalEpochToRealize[lastUpdateEpoch];
+        }
+
+        return weight;
+    }
+
+    /// ----- Unguarded nonpayable functions -----
+
+    /**
+        @notice Allow another address to unstake on behalf of the caller.
+                Useful for zaps and other functionality.
+        @param _caller Address of the caller to approve or unapprove.
+        @param isApproved is `_caller` approved?
+    */
+    function setApprovedUnstaker(address _caller, bool isApproved) external {
+        isApprovedUnstaker[msg.sender][_caller] = isApproved;
+        emit ApprovedUnstakerSet(msg.sender, _caller, isApproved);
+    }
+
     /**
         @notice Stake tokens into the staking contract.
         @param _amount Amount of tokens to stake.
@@ -117,42 +242,6 @@ contract BoostedStaker {
     function lock(address _account, uint256 _amount) external {
         require(isLockingEnabled(), "Locks are disabled");
         _stake(_account, _amount, true);
-    }
-
-    function _stake(address _account, uint256 _amount, bool isLocked) internal {
-        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
-
-        // Before going further, let's sync our account and global weights
-        uint256 systemEpoch = getEpoch();
-        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
-
-        uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
-
-        uint256 weight;
-        if (isLocked) {
-            weight = _getWeight(_amount, STAKE_GROWTH_EPOCHS);
-            acctData.lockedStake += uint112(_amount);
-
-            accountEpochToRealize[_account][realizeEpoch].locked += uint128(_amount);
-        } else {
-            weight = _amount;
-            acctData.pendingStake += uint112(_amount);
-            globalGrowthRate += uint112(_amount);
-
-            accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
-            globalEpochToRealize[realizeEpoch] += uint128(_amount);
-        }
-
-        accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + weight);
-        globalEpochWeights[systemEpoch] = uint128(globalWeight + weight);
-
-        acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
-        accountData[_account] = acctData;
-        totalSupply += uint120(_amount);
-
-        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight);
     }
 
     /**
@@ -266,6 +355,90 @@ contract BoostedStaker {
         accountData[_account] = acctData;
     }
 
+    /**
+        @notice Get the current total system weight
+        @dev Also updates local storage values for total weights. Using
+             this function over it's `view` counterpart is preferred for
+             contract -> contract interactions.
+    */
+    function checkpointGlobal() external returns (uint256) {
+        uint256 systemEpoch = getEpoch();
+        return _checkpointGlobal(systemEpoch);
+    }
+
+    /// ----- Owner-only nonpayable functions -----
+
+    /**
+        @notice Disable locks in this contract
+        @dev Allows immediate withdrawal for all depositors. Cannot be undone.
+     */
+    function disableLocks() external onlyOwner {
+        locksEnabled = false;
+    }
+
+    function sweep(IERC20 token, address receiver) external onlyOwner {
+        uint256 amount = token.balanceOf(address(this));
+        if (token == stakeToken) {
+            amount = amount - totalSupply;
+        }
+        if (amount > 0) token.safeTransfer(receiver, amount);
+    }
+
+    /// ----- Internal functions -----
+
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
+    /** @dev The increased weight from `amount` after a number of epochs has passed */
+    function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
+        assert(STAKE_GROWTH_EPOCHS >= epochs); // TODO remove me
+        amount *= MAX_WEIGHT_MULTIPLIER - 1;
+        return uint128((amount * epochs) / STAKE_GROWTH_EPOCHS);
+    }
+
+    /** @dev The total weight of `amount` after a number of epochs has passed */
+    function _getWeight(uint256 amount, uint256 epochs) internal view returns (uint256 weight) {
+        uint256 growth = _getWeightGrowth(amount, epochs);
+        return amount + growth;
+    }
+
+    function _stake(address _account, uint256 _amount, bool isLocked) internal {
+        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
+
+        // Before going further, let's sync our account and global weights
+        uint256 systemEpoch = getEpoch();
+        (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
+        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
+
+        uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
+
+        uint256 weight;
+        if (isLocked) {
+            weight = _getWeight(_amount, STAKE_GROWTH_EPOCHS);
+            acctData.lockedStake += uint112(_amount);
+
+            accountEpochToRealize[_account][realizeEpoch].locked += uint128(_amount);
+        } else {
+            weight = _amount;
+            acctData.pendingStake += uint112(_amount);
+            globalGrowthRate += uint112(_amount);
+
+            accountEpochToRealize[_account][realizeEpoch].weight += uint128(_amount);
+            globalEpochToRealize[realizeEpoch] += uint128(_amount);
+        }
+
+        accountEpochWeights[_account][systemEpoch] = uint128(accountWeight + weight);
+        globalEpochWeights[systemEpoch] = uint128(globalWeight + weight);
+
+        acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
+        accountData[_account] = acctData;
+        totalSupply += uint120(_amount);
+
+        stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
+        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight);
+    }
+
     function _checkpointAccount(
         address _account,
         uint256 _systemEpoch
@@ -357,62 +530,6 @@ contract BoostedStaker {
     }
 
     /**
-        @notice View function to get the current weight for an account
-    */
-    function getAccountWeight(address account) external view returns (uint256) {
-        return getAccountWeightAt(account, getEpoch());
-    }
-
-    /**
-        @notice Get the weight for an account in a given epoch
-    */
-    function getAccountWeightAt(address _account, uint256 _epoch) public view returns (uint256) {
-        if (_epoch > getEpoch()) return 0;
-
-        AccountData memory acctData = accountData[_account];
-
-        uint16 lastUpdateEpoch = acctData.lastUpdateEpoch;
-
-        if (lastUpdateEpoch >= _epoch) return accountEpochWeights[_account][_epoch];
-
-        uint256 weight = accountEpochWeights[_account][lastUpdateEpoch];
-
-        uint256 pending = uint256(acctData.pendingStake);
-        if (pending == 0) return weight;
-
-        uint16 bitmap = acctData.updateEpochBitmap;
-
-        while (lastUpdateEpoch < _epoch) {
-            // Populate data for missed epochs
-            unchecked {
-                lastUpdateEpoch++;
-            }
-            weight += _getWeightGrowth(pending, 1);
-
-            // Our bitmap is used to determine if epoch has any amount to realize.
-            bitmap = bitmap << 1;
-            if (bitmap & MAX_EPOCH_BIT == MAX_EPOCH_BIT) {
-                // If left-most bit is true, we have something to realize; push pending to realized.
-                pending -= accountEpochToRealize[_account][lastUpdateEpoch].weight;
-                if (pending == 0) break; // All pending has now been realized, let's exit.
-            }
-        }
-
-        return weight;
-    }
-
-    /**
-        @notice Get the current total system weight
-        @dev Also updates local storage values for total weights. Using
-             this function over it's `view` counterpart is preferred for
-             contract -> contract interactions.
-    */
-    function checkpointGlobal() external returns (uint256) {
-        uint256 systemEpoch = getEpoch();
-        return _checkpointGlobal(systemEpoch);
-    }
-
-    /**
         @notice Get the current total system weight
         @dev Also updates local storage values for total weights. Using
              this function over it's `view` counterpart is preferred for
@@ -447,111 +564,5 @@ contract BoostedStaker {
         globalLastUpdateEpoch = uint16(systemEpoch);
 
         return weight;
-    }
-
-    /**
-        @notice Get the system weight for current epoch.
-    */
-    function getGlobalWeight() external view returns (uint256) {
-        return getGlobalWeightAt(getEpoch());
-    }
-
-    /**
-        @notice Get the system weight for a specified epoch in the past.
-        @dev querying a epoch in the future will always return 0.
-        @param epoch the epoch number to query global weight for.
-    */
-    function getGlobalWeightAt(uint256 epoch) public view returns (uint256) {
-        uint256 systemEpoch = getEpoch();
-        if (epoch > systemEpoch) return 0;
-
-        // Read these together since they are packed in the same slot.
-        uint16 lastUpdateEpoch = globalLastUpdateEpoch;
-        uint256 rate = globalGrowthRate;
-
-        if (epoch <= lastUpdateEpoch) return globalEpochWeights[epoch];
-
-        uint256 weight = globalEpochWeights[lastUpdateEpoch];
-        if (rate == 0) {
-            return weight;
-        }
-
-        while (lastUpdateEpoch < epoch) {
-            unchecked {
-                lastUpdateEpoch++;
-            }
-
-            weight += _getWeightGrowth(rate, 1);
-            rate -= globalEpochToRealize[lastUpdateEpoch];
-        }
-
-        return weight;
-    }
-
-    /**
-        @notice Returns the balance of underlying staked tokens for an account
-        @param _account Account to query balance.
-        @return balance of account.
-    */
-    function balanceOf(address _account) external view returns (uint256) {
-        AccountData memory acctData = accountData[_account];
-        return (acctData.pendingStake + acctData.realizedStake + acctData.lockedStake);
-    }
-
-    /**
-        @notice Allow another address to unstake on behalf of the caller.
-                Useful for zaps and other functionality.
-        @param _caller Address of the caller to approve or unapprove.
-        @param isApproved is `_caller` approved?
-    */
-    function setApprovedUnstaker(address _caller, bool isApproved) external {
-        isApprovedUnstaker[msg.sender][_caller] = isApproved;
-        emit ApprovedUnstakerSet(msg.sender, _caller, isApproved);
-    }
-
-    function sweep(IERC20 token, address receiver) external {
-        require(msg.sender == FACTORY.owner(), "!authorized");
-        uint256 amount = token.balanceOf(address(this));
-        if (token == stakeToken) {
-            amount = amount - totalSupply;
-        }
-        if (amount > 0) token.safeTransfer(receiver, amount);
-    }
-
-    function getEpoch() public view returns (uint256 epoch) {
-        unchecked {
-            return (block.timestamp - START_TIME) / EPOCH_LENGTH;
-        }
-    }
-
-    function isLockingEnabled() public view returns (bool) {
-        if (!locksEnabled) return false;
-        return FACTORY.isLockingEnabled();
-    }
-
-    /**
-        @notice Disable locks in this contract
-        @dev Allows immediate withdrawal for all depositors. Cannot be undone.
-     */
-    function disableLocks() external {
-        require(msg.sender == FACTORY.owner(), "!authorized");
-        locksEnabled = false;
-    }
-
-    function min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
-    }
-
-    /** @dev The increased weight from `amount` after a number of epochs has passed */
-    function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
-        assert(STAKE_GROWTH_EPOCHS >= epochs); // TODO remove me
-        amount *= MAX_WEIGHT_MULTIPLIER - 1;
-        return uint128((amount * epochs) / STAKE_GROWTH_EPOCHS);
-    }
-
-    /** @dev The total weight of `amount` after a number of epochs has passed */
-    function _getWeight(uint256 amount, uint256 epochs) internal view returns (uint256 weight) {
-        uint256 growth = _getWeightGrowth(amount, epochs);
-        return amount + growth;
     }
 }
