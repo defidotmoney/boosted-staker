@@ -15,6 +15,8 @@ contract StakerFactory is Ownable2Step {
 
     mapping(address token => address staker) public boostedStakers;
 
+    bool public isLockingEnabled;
+
     constructor(uint256 epochDays, uint256 stakeGrowthEpochs) Ownable(msg.sender) {
         require(stakeGrowthEpochs > 0 && stakeGrowthEpochs < 16, "Invalid STAKE_GROWTH_EPOCHS");
 
@@ -26,6 +28,8 @@ contract StakerFactory is Ownable2Step {
         if (block.timestamp >= startTime + 12 hours) startTime += 12 hours;
         else startTime -= 12 hours;
         START_TIME = startTime;
+
+        isLockingEnabled = true;
     }
 
     /**
@@ -50,5 +54,14 @@ contract StakerFactory is Ownable2Step {
 
         boostedStakers[token] = deployedAddress;
         return deployedAddress;
+    }
+
+    /**
+        @notice Disable locks in all booster contracts
+        @dev Allows immediate withdrawal for all depositors. Used when sunsetting
+             the staker system. This action cannot be undone.
+     */
+    function disableLocksGlobally() external onlyOwner {
+        isLockingEnabled = false;
     }
 }

@@ -68,3 +68,17 @@ def test_lock(staker, alice):
     assert staker.getAccountWeight(alice) == 0
     assert staker.getGlobalWeight() == 0
     assert staker.balanceOf(alice) == 0
+
+
+def test_disable_locks(staker, alice, deployer):
+    staker.lock(alice, 10**18, {"from": alice})
+
+    chain.mine(timedelta=staker.EPOCH_LENGTH() * 3 + 1)
+
+    staker.disableLocks({"from": deployer})
+
+    staker.unstake(alice, 10**18, alice, {"from": alice})
+
+    assert staker.getAccountWeight(alice) == 0
+    assert staker.getGlobalWeight() == 0
+    assert staker.balanceOf(alice) == 0

@@ -28,7 +28,11 @@ def token():
 
 
 @pytest.fixture(scope="module")
-def staker(BoostedStaker, token, deployer):
-    return BoostedStaker.deploy(
-        token, MAX_GROWTH_EPOCHS, MAX_WEIGHT_MULTIPLIER, 0, EPOCH_DAYS, {"from": deployer}
-    )
+def factory(StakerFactory, deployer):
+    return StakerFactory.deploy(EPOCH_DAYS, MAX_GROWTH_EPOCHS, {"from": deployer})
+
+
+@pytest.fixture(scope="module")
+def staker(BoostedStaker, factory, token, deployer):
+    factory.deployBoostedStaker(token, MAX_WEIGHT_MULTIPLIER, {"from": deployer})
+    return BoostedStaker.at(factory.boostedStakers(token))

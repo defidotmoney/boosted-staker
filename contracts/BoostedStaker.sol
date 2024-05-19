@@ -32,8 +32,9 @@ contract BoostedStaker {
     uint112 public globalGrowthRate;
     uint16 public globalLastUpdateWeek;
 
-    // Generic token interface.
-    uint128 public totalSupply;
+    uint120 public totalSupply;
+
+    bool private locksEnabled;
 
     // Permissioned roles
     mapping(address account => mapping(address caller => ApprovalStatus approvalStatus)) public approvedCaller;
@@ -111,6 +112,8 @@ contract BoostedStaker {
             require(_start_time <= block.timestamp, "!Past");
             START_TIME = _start_time;
         }
+
+        locksEnabled = true;
     }
 
     /**
@@ -122,7 +125,7 @@ contract BoostedStaker {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.StakeOnly, "!Permission");
         }
-        require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
+        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
 
         // Before going further, let's sync our account and global weights
         uint256 systemWeek = getEpoch();
@@ -141,7 +144,7 @@ contract BoostedStaker {
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += uint128(_amount);
+        totalSupply += uint120(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + _amount, _amount);
@@ -151,7 +154,8 @@ contract BoostedStaker {
 
     function lock(address _account, uint256 _amount) external {
         // TODO: ACL
-        require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
+        require(_amount > 0 && _amount < type(uint112).max, "invalid amount");
+        require(isLockingEnabled(), "Locks are disabled");
 
         // Before going further, let's sync our account and global weights
         uint256 systemWeek = getEpoch();
@@ -170,7 +174,7 @@ contract BoostedStaker {
 
         acctData.updateWeeksBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += uint128(_amount);
+        totalSupply += uint120(_amount);
 
         stakeToken.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemWeek, _amount, accountWeight + weight, weight);
@@ -180,12 +184,14 @@ contract BoostedStaker {
         @notice Unstake tokens from the contract on behalf of another user.
         @dev During partial unstake, this will always remove from the least-weighted first.
     */
-    function unstake(address _account, uint256 _amount, address _receiver) external returns (uint256) {
+    function unstake(address _account, uint256 _amount, address _receiver) external {
+        require(_amount > 0, "Cannot unstake 0");
+
         if (msg.sender != _account) {
             ApprovalStatus status = approvedCaller[_account][msg.sender];
             require(status == ApprovalStatus.StakeAndUnstake || status == ApprovalStatus.UnstakeOnly, "!Permission");
         }
-        require(_amount > 1 && _amount < type(uint112).max, "invalid amount");
+
         uint256 systemWeek = getEpoch();
 
         // Before going further, let's sync our account and global weights
@@ -246,13 +252,11 @@ contract BoostedStaker {
         uint256 newAccountWeight = accountWeeklyWeights[_account][systemWeek] - weightToRemove;
         accountWeeklyWeights[_account][systemWeek] = uint128(newAccountWeight);
 
-        totalSupply -= uint128(_amount);
+        totalSupply -= uint120(_amount);
 
         emit Unstaked(_account, systemWeek, _amount, newAccountWeight, weightToRemove);
 
         stakeToken.safeTransfer(_receiver, _amount);
-
-        return _amount;
     }
 
     /**
@@ -295,15 +299,22 @@ contract BoostedStaker {
         uint256 lastUpdateWeek = acctData.lastUpdateWeek;
         uint128[MAX_WEEKS] storage weekly = accountWeeklyWeights[_account];
 
+        uint256 pending = acctData.pendingStake;
+        uint256 locked = acctData.lockedStake;
+        uint256 realized = acctData.realizedStake;
+
+        if (locked > 0 && !isLockingEnabled()) {
+            realized += locked;
+            locked = 0;
+            acctData.realizedStake = uint112(realized);
+            acctData.lockedStake = 0;
+        }
+
         if (_systemWeek == lastUpdateWeek) {
             return (acctData, weekly[lastUpdateWeek]);
         }
 
         require(_systemWeek > lastUpdateWeek, "specified week is older than last update.");
-
-        uint256 pending = acctData.pendingStake;
-        uint256 locked = acctData.lockedStake;
-        uint256 realized = acctData.realizedStake;
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
@@ -340,8 +351,14 @@ contract BoostedStaker {
                 // Do any updates needed to realize an amount for an account.
                 ToRealize memory weeklyRealized = accountWeeklyToRealize[_account][lastUpdateWeek];
                 pending -= weeklyRealized.weight;
-                locked -= weeklyRealized.locked;
-                realized += weeklyRealized.weight + weeklyRealized.locked;
+                realized += weeklyRealized.weight;
+
+                if (locked > 0) {
+                    // skip if `locked == 0` to avoid issues after disabling locks
+                    locked -= weeklyRealized.locked;
+                    realized += weeklyRealized.locked;
+                }
+
                 if (pending == 0 && locked == 0) break; // All pending has been realized. No need to continue.
             }
         }
@@ -529,6 +546,20 @@ contract BoostedStaker {
         unchecked {
             return (block.timestamp - START_TIME) / EPOCH_LENGTH;
         }
+    }
+
+    function isLockingEnabled() public view returns (bool) {
+        if (!locksEnabled) return false;
+        return FACTORY.isLockingEnabled();
+    }
+
+    /**
+        @notice Disable locks in this contract
+        @dev Allows immediate withdrawal for all depositors. Cannot be undone.
+     */
+    function disableLocks() external {
+        require(msg.sender == FACTORY.owner(), "!authorized");
+        locksEnabled = false;
     }
 
     function min(uint256 a, uint256 b) internal pure returns (uint256) {
