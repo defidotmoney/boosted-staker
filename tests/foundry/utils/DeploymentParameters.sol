@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.25;
+
+library DeploymentParams {
+    //////////////////////////////////////////////////////
+    /// --- STAKER FACTORY
+    //////////////////////////////////////////////////////
+    uint256 public constant EPOCH_DAYS = 7;
+    uint256 public constant STAKE_GROWTH_EPOCHS = 7;
+
+    //////////////////////////////////////////////////////
+    /// --- BOOSTED STAKER
+    //////////////////////////////////////////////////////
+    uint256 public constant MAX_WEIGHT_MULTIPLIER = 2;
+}
