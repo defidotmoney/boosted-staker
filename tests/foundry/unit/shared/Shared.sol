@@ -9,15 +9,20 @@ import {StakerFactory} from "../../../../contracts/Factory.sol";
 import {BoostedStaker} from "../../../../contracts/BoostedStaker.sol";
 
 // Test imports
-import {Base_Test_} from "../../Base.sol";
+import {Modifiers} from "./Modifiers.sol";
 import {MockERC20} from "../../utils/mocks/MockERC20.sol";
 import {Environment as ENV} from "../../utils/Environment.sol";
 import {DeploymentParams as DP} from "../../utils/DeploymentParameters.sol";
 
-contract Unit_Shared_Tests_ is Base_Test_ {
+contract Unit_Shared_Tests_ is Modifiers {
+    uint256 public EPOCH_LENGHT;
+    uint256 public STAKE_GROWTH_EPOCHS;
+    uint256 public MAX_WEIGHT_MULTIPLIER;
+
     //////////////////////////////////////////////////////
     /// --- SETUP
     //////////////////////////////////////////////////////
+
     function setUp() public override {
         super.setUp();
 
@@ -29,11 +34,18 @@ contract Unit_Shared_Tests_ is Base_Test_ {
 
         // 3. Deploy contracts
         _deployContracts();
+
+        // 4. Set variables
+        _setVariables();
+
+        // 5. Approvals
+        _approvals();
     }
 
     //////////////////////////////////////////////////////
     /// --- CORE FUNCTIONS
     //////////////////////////////////////////////////////
+
     function _setUpRealisticEnvironment() internal {
         vm.warp(ENV.TIMESTAMP); // Setup realistic environment Timestamp
         vm.roll(ENV.BLOCKNUMBER); // Setup realistic environment Blocknumber
@@ -55,6 +67,16 @@ contract Unit_Shared_Tests_ is Base_Test_ {
 
         // Deploy staker
         vm.prank(multisig);
-        factory.deployBoostedStaker(address(token), DP.MAX_WEIGHT_MULTIPLIER);
+        staker = BoostedStaker(factory.deployBoostedStaker(address(token), DP.MAX_WEIGHT_MULTIPLIER));
+    }
+
+    function _setVariables() internal {
+        EPOCH_LENGHT = staker.EPOCH_LENGTH();
+        MAX_WEIGHT_MULTIPLIER = staker.MAX_WEIGHT_MULTIPLIER();
+        STAKE_GROWTH_EPOCHS = staker.STAKE_GROWTH_EPOCHS();
+    }
+
+    function _approvals() internal {
+        token.approve(address(staker), type(uint256).max);
     }
 }
