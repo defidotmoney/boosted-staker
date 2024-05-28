@@ -11,5 +11,5 @@ library DeploymentParams {
     //////////////////////////////////////////////////////
     /// --- BOOSTED STAKER
     //////////////////////////////////////////////////////
-    uint256 public constant MAX_WEIGHT_MULTIPLIER = 2;
+    uint256 public constant MAX_WEIGHT_MULTIPLIER = 3;
 }
