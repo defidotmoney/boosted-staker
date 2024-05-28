@@ -313,4 +313,97 @@ contract Unit_Concrete_BoostedStaker_Constructor_Tests is Unit_Shared_Tests_ {
         assertEq(futur[0].lockedStake, 0);
         assertEq(staker.getGlobalWeight(), newWeight);
     }
+
+    /// @notice Test Stake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake DEFAULT_AMOUNT for someone else
+    /// -> It aims to check that the stake is done for someone else
+    function test_Stake_When_StakeForSomeoneElse() public timejump(EPOCH_LENGHT) {
+        deal(address(token), address(this), DEFAULT_AMOUNT);
+
+        uint256 epoch = 1;
+
+        // Expected event
+        vm.expectEmit({emitter: address(token)});
+        emit IERC20.Transfer(address(this), address(staker), DEFAULT_AMOUNT);
+        vm.expectEmit({emitter: address(staker)});
+        emit BoostedStaker.Staked(alice, epoch, DEFAULT_AMOUNT, DEFAULT_AMOUNT, DEFAULT_AMOUNT, false);
+
+        // Main call
+        staker.stake(alice, DEFAULT_AMOUNT);
+
+        // Assertions after
+        (BoostedStaker.AccountView memory accountView,) = staker.getAccountFullView(alice);
+        assertEq(staker.getEpoch(), epoch);
+        assertEq(accountView.balance, DEFAULT_AMOUNT);
+        assertEq(accountView.weight, DEFAULT_AMOUNT);
+        assertEq(accountView.pendingStake, DEFAULT_AMOUNT);
+        assertEq(accountView.realizedStake, 0);
+        assertEq(accountView.lockedStake, 0);
+        assertEq(staker.balanceOf(alice), DEFAULT_AMOUNT);
+    }
+
+    /// @notice Test Stake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User Stake DEFAULT_AMOUNT
+    /// - Alice Stake DEFAULT_AMOUNT
+    /// -> It aims to check that the global data is updated correctly
+    function test_Stake_When_2Users()
+        public
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+    {
+        deal(address(token), address(this), DEFAULT_AMOUNT);
+
+        uint256 epoch = 1;
+        uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
+        uint256 newWeight = DEFAULT_AMOUNT * 2;
+
+        // Expected event
+        vm.expectEmit({emitter: address(token)});
+        emit IERC20.Transfer(address(this), address(staker), DEFAULT_AMOUNT);
+        vm.expectEmit({emitter: address(staker)});
+        emit BoostedStaker.Staked(alice, epoch, DEFAULT_AMOUNT, DEFAULT_AMOUNT, DEFAULT_AMOUNT, false);
+
+        // Main call
+        staker.stake(alice, DEFAULT_AMOUNT);
+
+        // Assertions after
+        (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
+            staker.getAccountFullView(alice);
+        assertEq(staker.getEpoch(), epoch);
+        // Account data
+        assertEq(staker.getAccPendingStakeBSR(alice), DEFAULT_AMOUNT);
+        assertEq(staker.getAccLastUpdateEpochBSR(alice), epoch);
+        assertTrue(staker.getAccUpdateEpochBitmapBSR(alice, 0));
+        assertEq(staker.getAccEpochWeightBSR(alice, epoch), DEFAULT_AMOUNT);
+        assertEq(staker.getAccEpochToRealizePendingBSR(alice, realizeEpoch), DEFAULT_AMOUNT);
+        // Global data
+        assertEq(staker.getGlobalEpochWeightsBSR(epoch), newWeight);
+        assertEq(staker.globalEpochToRealize(realizeEpoch), DEFAULT_AMOUNT * 2);
+        assertEq(staker.globalGrowthRate(), newWeight);
+        assertEq(staker.globalLastUpdateEpoch(), epoch);
+        assertEq(staker.totalSupply(), DEFAULT_AMOUNT * 2);
+        // Views
+        assertEq(staker.balanceOf(alice), DEFAULT_AMOUNT);
+        assertEq(staker.getAccountWeight(alice), DEFAULT_AMOUNT);
+        assertEq(accountView.balance, DEFAULT_AMOUNT);
+        assertEq(accountView.weight, DEFAULT_AMOUNT);
+        assertEq(accountView.pendingStake, DEFAULT_AMOUNT);
+        assertEq(accountView.realizedStake, 0);
+        assertEq(accountView.lockedStake, 0);
+        assertEq(futur.length, 1);
+        assertEq(futur[0].epochsToMaturity, 7);
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[0].pendingStake, DEFAULT_AMOUNT);
+        assertEq(futur[0].lockedStake, 0);
+        assertEq(staker.getGlobalWeight(), newWeight);
+    }
 }
