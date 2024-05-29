@@ -100,7 +100,6 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
     {
         deal(address(token), address(this), DEFAULT_AMOUNT);
 
-        uint256 epochToSkip = 0;
         uint256 epoch = 1;
         uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
         uint256 weight = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1);
