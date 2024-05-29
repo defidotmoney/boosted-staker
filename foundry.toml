@@ -3,7 +3,7 @@ src = "contracts"
 out = "out"
 libs = ["lib"]
 test = "tests/foundry"
-verbosity = 5
+verbosity = 3
 evm_version = "paris"
 
 [fuzz]
