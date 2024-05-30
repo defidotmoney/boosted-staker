@@ -330,11 +330,12 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         uint256 realizeEpoch = epoch + STAKE_GROWTH_EPOCHS;
         uint256 amountToRemove = DEFAULT_AMOUNT * 2;
         uint256 weightBefore = DEFAULT_AMOUNT
-            + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * STAKE_GROWTH_EPOCHS / STAKE_GROWTH_EPOCHS // Locked
-            + DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 1 / STAKE_GROWTH_EPOCHS // Staked At epoch 1
-            + DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 0 / STAKE_GROWTH_EPOCHS; // Staked At epoch 2
-        uint256 weightToRemove = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 1 / STAKE_GROWTH_EPOCHS
-            + DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 0 / STAKE_GROWTH_EPOCHS;
+            + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS // Locked
+            + DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * 1 // Staked At epoch 1
+            + DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * 0; // Staked At epoch 2
+        uint256 weightToRemove = DEFAULT_AMOUNT
+            + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * 1 + DEFAULT_AMOUNT
+            + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * 0;
         assertEq(staker.getAccountWeightAt(address(this), epoch), weightBefore);
 
         vm.expectEmit({emitter: address(staker)});
@@ -405,7 +406,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
 
         // Main call
         */
-       // Next call revert due to underflow.
-       // staker.unstake(address(this), DEFAULT_AMOUNT - 1, address(this));
+        // Next call revert due to underflow.
+        staker.unstake(address(this), DEFAULT_AMOUNT, address(this));
     }
 }
