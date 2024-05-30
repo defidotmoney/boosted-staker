@@ -428,7 +428,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(staker.getAccEpochToRealizeLockedBSR(address(this), epoch), 0);
         // Global data
         assertEq(staker.getGlobalEpochWeightsBSR(epoch), 0);
-        //assertEq(staker.globalEpochToRealize(epoch), 0); // Should be 0 but not updated
+        assertEq(staker.globalEpochToRealize(epoch), DEFAULT_AMOUNT); // ToRealize doesn't decrease when realized decrease
         assertEq(staker.globalGrowthRate(), 0);
         assertEq(staker.globalLastUpdateEpoch(), epoch);
         assertEq(staker.totalSupply(), 0);
@@ -493,7 +493,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(staker.getAccEpochToRealizeLockedBSR(address(this), epoch), 0);
         // Global data
         assertEq(staker.getGlobalEpochWeightsBSR(epoch), weightDiff);
-        //assertEq(staker.globalEpochToRealize(epoch), 0); // Should be 0 but not updated
+        assertEq(staker.globalEpochToRealize(epoch), DEFAULT_AMOUNT); // ToRealize doesn't decrease when realized decrease
         assertEq(staker.globalGrowthRate(), 0);
         assertEq(staker.globalLastUpdateEpoch(), epoch);
         assertEq(staker.totalSupply(), DEFAULT_AMOUNT - amountNeeded);
@@ -574,7 +574,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(staker.getAccEpochToRealizePendingBSR(address(this), epoch + 4), 0);
         // Global data
         assertEq(staker.getGlobalEpochWeightsBSR(epoch), weightDiff);
-        //assertEq(staker.globalEpochToRealize(epoch), DEFAULT_AMOUNT * 2 - amountNeeded); // Should be 0 but not updated
+        assertEq(staker.globalEpochToRealize(epoch), DEFAULT_AMOUNT); // ToRealize doesn't decrease when realized decrease
         assertEq(staker.globalGrowthRate(), 0);
         assertEq(staker.globalLastUpdateEpoch(), epoch);
         assertEq(staker.totalSupply(), DEFAULT_AMOUNT * 2 - amountNeeded);
