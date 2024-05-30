@@ -39,7 +39,8 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
 
         uint256 epoch = 1;
         uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
-        uint256 weight = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1);
+        uint256 weight =
+            DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS;
 
         // Expected event
         vm.expectEmit({emitter: address(token)});
@@ -102,7 +103,8 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
 
         uint256 epoch = 1;
         uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
-        uint256 weight = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1);
+        uint256 weight =
+            DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS;
 
         // Expected event
         vm.expectEmit({emitter: address(token)});
@@ -165,7 +167,8 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         uint256 epochToSkip = 1;
         uint256 epoch = 2;
         uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
-        uint256 weight = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1);
+        uint256 weight =
+            DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS;
 
         // Expected event
         vm.expectEmit({emitter: address(token)});
@@ -237,7 +240,8 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         uint256 realizeEpoch = epoch + staker.STAKE_GROWTH_EPOCHS();
 
         uint256 weightGrowth = DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS;
-        uint256 weightExtra = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1);
+        uint256 weightExtra =
+            DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS;
         uint256 weight = DEFAULT_AMOUNT + weightGrowth + weightExtra;
 
         // Expected event
