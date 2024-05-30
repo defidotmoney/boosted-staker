@@ -88,6 +88,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, 0);
         assertEq(futur.length, 0);
         assertEq(staker.getGlobalWeight(), 0);
+        assertEq(token.balanceOf(address(this)), DEFAULT_AMOUNT);
     }
 
     /// @notice Test Unstake under the following conditions:
@@ -155,6 +156,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
         assertEq(futur[0].pendingStake, DEFAULT_AMOUNT - amountNeeded);
         assertEq(futur[0].lockedStake, 0);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
     }
 
     /// @notice Test Unstake under the following conditions:
@@ -223,6 +225,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS + 1)));
         assertEq(futur[0].pendingStake, DEFAULT_AMOUNT - amountNeeded);
         assertEq(futur[0].lockedStake, 0);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
     }
 
     /// @notice Test Unstake under the following conditions:
@@ -254,18 +257,18 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         uint256 epoch = 2;
         uint256 realizeEpoch = epoch + STAKE_GROWTH_EPOCHS;
         assertEq(staker.getEpoch(), epoch);
-        uint256 amountToRemove = DEFAULT_AMOUNT * 2;
+        uint256 amountNeeded = DEFAULT_AMOUNT * 2;
         uint256 weightToRemove = DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 1 / STAKE_GROWTH_EPOCHS
             + DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * 0 / STAKE_GROWTH_EPOCHS;
         assertEq(staker.getAccountWeightAt(address(this), epoch), weightToRemove);
 
         vm.expectEmit({emitter: address(staker)});
-        emit BoostedStaker.Unstaked(address(this), epoch, amountToRemove, 0, weightToRemove);
+        emit BoostedStaker.Unstaked(address(this), epoch, amountNeeded, 0, weightToRemove);
         vm.expectEmit({emitter: address(token)});
-        emit IERC20.Transfer(address(staker), address(this), amountToRemove);
+        emit IERC20.Transfer(address(staker), address(this), amountNeeded);
 
         // Main call
-        staker.unstake(address(this), amountToRemove, address(this));
+        staker.unstake(address(this), amountNeeded, address(this));
 
         // Assertions after
         (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
@@ -295,6 +298,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, 0);
         assertEq(futur.length, 0);
         assertEq(staker.getGlobalWeight(), 0);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
     }
 
     /// @notice Test Unstake under the following conditions:
@@ -328,7 +332,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         uint256 epoch = 2;
         assertEq(staker.getEpoch(), epoch);
         uint256 realizeEpoch = epoch + STAKE_GROWTH_EPOCHS;
-        uint256 amountToRemove = DEFAULT_AMOUNT * 2;
+        uint256 amountNeeded = DEFAULT_AMOUNT * 2;
         uint256 weightBefore = DEFAULT_AMOUNT
             + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * STAKE_GROWTH_EPOCHS // Locked
             + DEFAULT_AMOUNT + (DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS) * 1 // Staked At epoch 1
@@ -339,12 +343,12 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(staker.getAccountWeightAt(address(this), epoch), weightBefore);
 
         vm.expectEmit({emitter: address(staker)});
-        emit BoostedStaker.Unstaked(address(this), epoch, amountToRemove, weightBefore - weightToRemove, weightToRemove);
+        emit BoostedStaker.Unstaked(address(this), epoch, amountNeeded, weightBefore - weightToRemove, weightToRemove);
         vm.expectEmit({emitter: address(token)});
-        emit IERC20.Transfer(address(staker), address(this), amountToRemove);
+        emit IERC20.Transfer(address(staker), address(this), amountNeeded);
 
         // Main call
-        staker.unstake(address(this), amountToRemove, address(this));
+        staker.unstake(address(this), amountNeeded, address(this));
 
         // Assertions after
         (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
@@ -377,8 +381,14 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(futur[0].pendingStake, 0);
         assertEq(futur[0].lockedStake, DEFAULT_AMOUNT);
         assertEq(staker.getGlobalWeight(), weightBefore - weightToRemove);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
     }
 
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake once
+    /// - Timejump until stake growth period is over
+    /// - User unstake full position as realized
     function test_Unstake_When_SinglePosition_FullRealized_FullPosition()
         public
         stake(
@@ -391,13 +401,11 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
             })
         )
     {
-        /*
         uint256 epoch = 1 + STAKE_GROWTH_EPOCHS;
-        uint256 realizeEpoch = epoch + STAKE_GROWTH_EPOCHS;
         assertEq(staker.getEpoch(), epoch);
         uint256 weightToRemove =
-            DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) * STAKE_GROWTH_EPOCHS / STAKE_GROWTH_EPOCHS;
-        //assertEq(staker.getAccountWeightAt(address(this), epoch), weightToRemove);
+            DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS;
+        assertEq(staker.getAccountWeightAt(address(this), epoch), weightToRemove);
 
         vm.expectEmit({emitter: address(staker)});
         emit BoostedStaker.Unstaked(address(this), epoch, DEFAULT_AMOUNT, 0, weightToRemove);
@@ -405,8 +413,230 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         emit IERC20.Transfer(address(staker), address(this), DEFAULT_AMOUNT);
 
         // Main call
-        */
-        // Next call revert due to underflow.
         staker.unstake(address(this), DEFAULT_AMOUNT, address(this));
+
+        // Assertions after
+        (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
+            staker.getAccountFullView(address(this));
+        // Account data
+        assertEq(staker.getAccPendingStakeBSR(address(this)), 0);
+        assertEq(staker.getAccRealizedStakeBSR(address(this)), 0);
+        assertEq(staker.getAccLastUpdateEpochBSR(address(this)), epoch);
+        assertFalse(staker.getAccUpdateEpochBitmapBSR(address(this), 0));
+        assertTrue(staker.getAccUpdateEpochBitmapBSR(address(this), 7));
+        assertEq(staker.getAccEpochWeightBSR(address(this), epoch), 0);
+        assertEq(staker.getAccEpochToRealizeLockedBSR(address(this), epoch), 0);
+        // Global data
+        assertEq(staker.getGlobalEpochWeightsBSR(epoch), 0);
+        //assertEq(staker.globalEpochToRealize(epoch), 0); // Should be 0 but not updated
+        assertEq(staker.globalGrowthRate(), 0);
+        assertEq(staker.globalLastUpdateEpoch(), epoch);
+        assertEq(staker.totalSupply(), 0);
+        // Views
+        assertEq(staker.balanceOf(address(this)), 0);
+        assertEq(staker.getAccountWeight(address(this)), 0);
+        assertEq(accountView.balance, 0);
+        assertEq(accountView.weight, 0);
+        assertEq(accountView.pendingStake, 0);
+        assertEq(accountView.realizedStake, 0);
+        assertEq(accountView.lockedStake, 0);
+        assertEq(futur.length, 0);
+        assertEq(staker.getGlobalWeight(), 0);
+        assertEq(token.balanceOf(address(this)), DEFAULT_AMOUNT);
+    }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake once
+    /// - Timejump until stake growth period is over
+    /// - User unstake half position as realized
+    function test_Unstake_When_SinglePosition_FullRealized_HalfPosition()
+        public
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+            })
+        )
+    {
+        uint256 epoch = 1 + STAKE_GROWTH_EPOCHS;
+        assertEq(staker.getEpoch(), epoch);
+        uint256 amountNeeded = DEFAULT_AMOUNT / 2;
+        uint256 weightBefore =
+            DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS;
+        uint256 weightToRemove =
+            amountNeeded + amountNeeded * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS;
+        assertEq(staker.getAccountWeightAt(address(this), epoch), weightBefore);
+        uint256 weightDiff = weightBefore - weightToRemove;
+
+        vm.expectEmit({emitter: address(staker)});
+        emit BoostedStaker.Unstaked(address(this), epoch, amountNeeded, weightDiff, weightToRemove);
+        vm.expectEmit({emitter: address(token)});
+        emit IERC20.Transfer(address(staker), address(this), amountNeeded);
+
+        // Main call
+        staker.unstake(address(this), amountNeeded, address(this));
+
+        // Assertions after
+        (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
+            staker.getAccountFullView(address(this));
+        // Account data
+        assertEq(staker.getAccPendingStakeBSR(address(this)), 0);
+        assertEq(staker.getAccRealizedStakeBSR(address(this)), DEFAULT_AMOUNT - amountNeeded);
+        assertEq(staker.getAccLastUpdateEpochBSR(address(this)), epoch);
+        assertFalse(staker.getAccUpdateEpochBitmapBSR(address(this), 0));
+        assertTrue(staker.getAccUpdateEpochBitmapBSR(address(this), 7));
+        assertEq(staker.getAccEpochWeightBSR(address(this), epoch), weightDiff);
+        assertEq(staker.getAccEpochToRealizeLockedBSR(address(this), epoch), 0);
+        // Global data
+        assertEq(staker.getGlobalEpochWeightsBSR(epoch), weightDiff);
+        //assertEq(staker.globalEpochToRealize(epoch), 0); // Should be 0 but not updated
+        assertEq(staker.globalGrowthRate(), 0);
+        assertEq(staker.globalLastUpdateEpoch(), epoch);
+        assertEq(staker.totalSupply(), DEFAULT_AMOUNT - amountNeeded);
+        // Views
+        assertEq(staker.balanceOf(address(this)), DEFAULT_AMOUNT - amountNeeded);
+        assertEq(staker.getAccountWeight(address(this)), weightDiff);
+        assertEq(accountView.balance, DEFAULT_AMOUNT - amountNeeded);
+        assertEq(accountView.weight, weightDiff);
+        assertEq(accountView.pendingStake, 0);
+        assertEq(accountView.realizedStake, DEFAULT_AMOUNT - amountNeeded);
+        assertEq(accountView.lockedStake, 0);
+        assertEq(futur.length, 0);
+        assertEq(staker.getGlobalWeight(), weightDiff);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
+    }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake once
+    /// - Timejump 4 epoch before stake growth period is over for 1st stake
+    /// - User stake once again
+    /// - Timejump 4 extra epoch, now stake growth period is over for 1st stake
+    /// - User unstake 3/4 of position, 100% from pending, 50% from realized
+    function test_Unstake_When_MultiplePosition_FullPending_PartRealized()
+        public
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS - 4),
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: EPOCH_LENGHT * 4
+            })
+        )
+    {
+        uint256 epoch = 1 + STAKE_GROWTH_EPOCHS;
+        assertEq(staker.getEpoch(), epoch);
+        uint256 amountNeeded = DEFAULT_AMOUNT + DEFAULT_AMOUNT / 2; // 100% from pending, 50% from realized
+        uint256 weightBefore = DEFAULT_AMOUNT
+            + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS + DEFAULT_AMOUNT
+            + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * 4;
+        uint256 weightToRemoveA =
+            DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * 4; // 100% from pending
+        uint256 weightToRemoveB = (
+            DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS
+        ) / 2; // 50% from realized
+        uint256 weightToRemove = weightToRemoveA + weightToRemoveB;
+        uint256 weightDiff = weightBefore - weightToRemove;
+        assertEq(staker.getAccountWeightAt(address(this), epoch), weightBefore);
+
+        vm.expectEmit({emitter: address(staker)});
+        emit BoostedStaker.Unstaked(address(this), epoch, amountNeeded, weightDiff, weightToRemove);
+        vm.expectEmit({emitter: address(token)});
+        emit IERC20.Transfer(address(staker), address(this), amountNeeded);
+
+        // Main call
+        staker.unstake(address(this), amountNeeded, address(this));
+
+        // Assertions after
+        (BoostedStaker.AccountView memory accountView, BoostedStaker.FutureRealizedStake[] memory futur) =
+            staker.getAccountFullView(address(this));
+        // Account data
+        assertEq(staker.getAccPendingStakeBSR(address(this)), 0);
+        assertEq(staker.getAccRealizedStakeBSR(address(this)), DEFAULT_AMOUNT / 2);
+        assertEq(staker.getAccLastUpdateEpochBSR(address(this)), epoch);
+        assertFalse(staker.getAccUpdateEpochBitmapBSR(address(this), 4)); // No more pending
+        assertTrue(staker.getAccUpdateEpochBitmapBSR(address(this), 7)); // Still some realized
+        assertEq(staker.getAccEpochWeightBSR(address(this), epoch), weightDiff);
+        assertEq(staker.getAccEpochToRealizePendingBSR(address(this), epoch + 4), 0);
+        // Global data
+        assertEq(staker.getGlobalEpochWeightsBSR(epoch), weightDiff);
+        //assertEq(staker.globalEpochToRealize(epoch), DEFAULT_AMOUNT * 2 - amountNeeded); // Should be 0 but not updated
+        assertEq(staker.globalGrowthRate(), 0);
+        assertEq(staker.globalLastUpdateEpoch(), epoch);
+        assertEq(staker.totalSupply(), DEFAULT_AMOUNT * 2 - amountNeeded);
+        // Views
+        assertEq(staker.balanceOf(address(this)), DEFAULT_AMOUNT * 2 - amountNeeded);
+        assertEq(staker.getAccountWeight(address(this)), weightDiff);
+        assertEq(accountView.balance, DEFAULT_AMOUNT * 2 - amountNeeded);
+        assertEq(accountView.weight, weightDiff);
+        assertEq(accountView.pendingStake, 0);
+        assertEq(accountView.realizedStake, DEFAULT_AMOUNT / 2);
+        assertEq(accountView.lockedStake, 0);
+        assertEq(futur.length, 0);
+        assertEq(staker.getGlobalWeight(), weightDiff);
+        assertEq(token.balanceOf(address(this)), amountNeeded);
+    }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - User approve alice as unlocker
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake once
+    /// - Alice unstake on the behalf of user
+    function test_Unstake_When_ForSomeoneElse()
+        public
+        approveUnstaker(address(this), alice)
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+    {
+        vm.prank(alice);
+        staker.unstake(address(this), DEFAULT_AMOUNT, address(this));
+
+        // Assertions after
+        assertEq(token.balanceOf(address(this)), DEFAULT_AMOUNT);
+        // Only testing unstaking for someone else, no need to check other values, as already tested in tests above.
+    }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stake once
+    /// - User unstake full position and set alice as receiver
+    function test_Unstake_When_ReceiverIsDifferentThanUser()
+        public
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGHT,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+    {
+        staker.unstake(address(this), DEFAULT_AMOUNT, alice);
+
+        // Assertions after
+        assertEq((token.balanceOf(alice)), DEFAULT_AMOUNT);
+        // Only testing unstaking with different receiver, no need to check other values, as already tested in tests above.
     }
 }
