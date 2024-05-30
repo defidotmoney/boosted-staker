@@ -664,5 +664,3 @@ contract BoostedStaker {
         return weight;
     }
 }
-
-// 1111111111111111
