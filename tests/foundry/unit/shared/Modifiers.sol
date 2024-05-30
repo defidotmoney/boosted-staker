@@ -43,4 +43,10 @@ abstract contract Modifiers is Base_Test_ {
 
         _;
     }
+
+    modifier approveUnstaker(address _account, address _unstaker) {
+        vm.prank(_account);
+        staker.setApprovedUnstaker(_unstaker, true);
+        _;
+    }
 }
