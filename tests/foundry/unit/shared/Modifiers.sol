@@ -24,6 +24,12 @@ abstract contract Modifiers is Base_Test_ {
         _;
     }
 
+    modifier asOwner() {
+        vm.startPrank(factory.owner());
+        _;
+        vm.stopPrank();
+    }
+
     modifier stake(Modifier_Stake memory _m) {
         if (_m.skipBefore > 0) {
             skip(_m.skipBefore);
