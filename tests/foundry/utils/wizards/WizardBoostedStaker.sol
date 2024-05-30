@@ -228,4 +228,10 @@ library WizardBoostedStaker {
         uint256 data = uint256(vm.load(address(_contract), slot)) >> (128 * offset);
         return data & ((2 ** 128) - 1);
     }
+
+    function getLocksEnabledBSR(BoostedStaker _contract) internal view returns (bool) {
+        bytes32 slot = bytes32(LOCKS_ENABLED_SLOT_REF);
+        uint256 data = uint256(vm.load(address(_contract), slot)) >> (112 + 16 + 120);
+        return data & 1 == 1;
+    }
 }
