@@ -55,4 +55,15 @@ abstract contract Modifiers is Base_Test_ {
         staker.setApprovedUnstaker(_unstaker, true);
         _;
     }
+
+    modifier disableLocks() {
+        vm.prank(factory.owner());
+        staker.disableLocks();
+        _;
+    }
+
+    modifier checkpointAccount(address _account) {
+        staker.checkpointAccount(_account);
+        _;
+    }
 }
