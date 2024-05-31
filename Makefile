@@ -31,7 +31,7 @@ test-%:
 # Coverage
 coverage:
 	@forge coverage --report lcov
-	@lcov --ignore-errors unused --remove ./lcov.info -o ./lcov.info.pruned "test/*" "script/*"
+	@lcov --ignore-errors unused --remove ./lcov.info -o ./lcov.info.pruned "tests/*" "script/*"
 
 coverage-html:
 	@make coverage
