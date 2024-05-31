@@ -495,7 +495,6 @@ contract BoostedStaker {
 
     /** @dev The increased weight from `amount` after a number of epochs has passed */
     function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
-        assert(STAKE_GROWTH_EPOCHS >= epochs); // TODO remove me
         amount *= MAX_WEIGHT_MULTIPLIER - 1;
         return uint128((amount / STAKE_GROWTH_EPOCHS) * epochs);
     }
