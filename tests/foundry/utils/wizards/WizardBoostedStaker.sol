@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Vm} from "forge-std/Vm.sol";
 import {SlotFinder} from "./SlotFinder.sol";
 
-import {BoostedStaker} from "../../../../contracts/BoostedStaker.sol";
+import {BoostedStaker} from "../../../../../contracts/BoostedStaker.sol";
 
 /// @notice Library to interact with BoostedStaker contract storage marked as private/internal
 library WizardBoostedStaker {
