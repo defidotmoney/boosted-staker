@@ -565,8 +565,6 @@ contract BoostedStaker {
             return (acctData, epochWeights[lastUpdateEpoch]);
         }
 
-        require(_systemEpoch > lastUpdateEpoch, "DFM:BS Invalid epoch");
-
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
                 weight = epochWeights[lastUpdateEpoch];
