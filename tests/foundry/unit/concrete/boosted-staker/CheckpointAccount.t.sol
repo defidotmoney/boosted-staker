@@ -10,14 +10,6 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
     using WizardBoostedStaker for BoostedStaker;
 
     //////////////////////////////////////////////////////
-    /// --- REVERTING TESTS
-    //////////////////////////////////////////////////////
-    function test_RevertWhen_CheckpointAccount_Because_InvalidEpoch() public timejump(EPOCH_LENGHT) {
-        //staker.checkpointAccount(address(this));
-        // Line 569 unreachable require(_systemEpoch > lastUpdateEpoch, "DFM:BS Invalid epoch");
-    }
-
-    //////////////////////////////////////////////////////
     /// --- VALIDATING TESTS
     //////////////////////////////////////////////////////
 
