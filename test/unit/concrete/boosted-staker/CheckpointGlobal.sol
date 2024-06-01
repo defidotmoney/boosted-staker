@@ -29,7 +29,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointGlobal_Tests is Unit_Shared_Tests
     /// @notice Test checkpointGlobal under the following conditions:
     /// - Timejump 1 epoch
     /// - No weight addedd
-    function test_CheckpointGlobal_When_WeightIsNull_Epoch1() public timejump(EPOCH_LENGHT) {
+    function test_CheckpointGlobal_When_WeightIsNull_Epoch1() public timejump(EPOCH_LENGTH) {
         // Assertions before
         assertEq(staker.globalLastUpdateEpoch(), 0);
 
@@ -49,11 +49,11 @@ contract Unit_Concrete_BoostedStaker_CheckpointGlobal_Tests is Unit_Shared_Tests
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT
+                skipAfter: EPOCH_LENGTH
             })
         )
     {
@@ -84,7 +84,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointGlobal_Tests is Unit_Shared_Tests
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -102,7 +102,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointGlobal_Tests is Unit_Shared_Tests
         uint256 weight =
             DEFAULT_AMOUNT + (((DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1)) / STAKE_GROWTH_EPOCHS) * epochMissing);
 
-        skip(EPOCH_LENGHT * epochMissing);
+        skip(EPOCH_LENGTH * epochMissing);
         // Main call
         assertEq(staker.checkpointGlobal(), weight);
 
@@ -139,11 +139,11 @@ contract Unit_Concrete_BoostedStaker_CheckpointGlobal_Tests is Unit_Shared_Tests
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS)
+                skipAfter: EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS)
             })
         )
     {

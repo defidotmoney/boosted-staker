@@ -29,7 +29,7 @@ contract Unit_Concrete_BoostedStaker_Sweep_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
@@ -61,7 +61,7 @@ contract Unit_Concrete_BoostedStaker_Sweep_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,

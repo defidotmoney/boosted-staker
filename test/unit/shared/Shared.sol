@@ -15,7 +15,7 @@ import {Environment as ENV} from "../../utils/Environment.sol";
 import {DeploymentParams as DP} from "../../utils/DeploymentParameters.sol";
 
 contract Unit_Shared_Tests_ is Modifiers {
-    uint256 public EPOCH_LENGHT;
+    uint256 public EPOCH_LENGTH;
     uint256 public STAKE_GROWTH_EPOCHS;
     uint256 public MAX_WEIGHT_MULTIPLIER;
 
@@ -71,7 +71,7 @@ contract Unit_Shared_Tests_ is Modifiers {
     }
 
     function _setVariables() internal {
-        EPOCH_LENGHT = staker.EPOCH_LENGTH();
+        EPOCH_LENGTH = staker.EPOCH_LENGTH();
         MAX_WEIGHT_MULTIPLIER = staker.MAX_WEIGHT_MULTIPLIER();
         STAKE_GROWTH_EPOCHS = staker.STAKE_GROWTH_EPOCHS();
     }

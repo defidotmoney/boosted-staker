@@ -31,7 +31,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
     /// @notice Test Stake under the following conditions:
     /// - Timejump to next epoch to avoid false 0
     /// - No previous position, first interaction with the contract
-    function test_Lock_When_NoPreviousPosition_() public timejump(EPOCH_LENGHT) {
+    function test_Lock_When_NoPreviousPosition_() public timejump(EPOCH_LENGTH) {
         // Assertions before
         // Not needed as no interaction with the contract
 
@@ -77,7 +77,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, DEFAULT_AMOUNT);
         assertEq(futur.length, 1);
         assertEq(futur[0].epochsToMaturity, 7);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch));
         assertEq(futur[0].pendingStake, 0);
         assertEq(futur[0].lockedStake, DEFAULT_AMOUNT);
         assertEq(staker.getGlobalWeight(), weight);
@@ -91,7 +91,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
@@ -140,7 +140,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, DEFAULT_AMOUNT * 2);
         assertEq(futur.length, 1);
         assertEq(futur[0].epochsToMaturity, 7);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch));
         assertEq(futur[0].pendingStake, 0);
         assertEq(futur[0].lockedStake, DEFAULT_AMOUNT * 2);
         assertEq(staker.getGlobalWeight(), weight * 2);
@@ -154,7 +154,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
@@ -176,7 +176,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         vm.expectEmit({emitter: address(staker)});
         emit BoostedStaker.Staked(address(this), epoch, DEFAULT_AMOUNT, weight * 2, weight, true);
 
-        skip(epochToSkip * EPOCH_LENGHT);
+        skip(epochToSkip * EPOCH_LENGTH);
         // Main call
         staker.lock(address(this), DEFAULT_AMOUNT);
 
@@ -207,11 +207,11 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, DEFAULT_AMOUNT * 2);
         assertEq(futur.length, 2);
         assertEq(futur[0].epochsToMaturity, 6);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch - EPOCH_LENGHT));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch - EPOCH_LENGTH));
         assertEq(futur[0].pendingStake, 0);
         assertEq(futur[0].lockedStake, DEFAULT_AMOUNT);
         assertEq(futur[1].epochsToMaturity, 7);
-        assertEq(futur[1].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[1].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch));
         assertEq(futur[1].pendingStake, 0);
         assertEq(futur[1].lockedStake, DEFAULT_AMOUNT);
         assertEq(staker.getGlobalWeight(), weight * 2);
@@ -225,7 +225,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -250,7 +250,7 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         vm.expectEmit({emitter: address(staker)});
         emit BoostedStaker.Staked(address(this), epoch, DEFAULT_AMOUNT, weight, weightExtra, true);
 
-        skip(epochToSkip * EPOCH_LENGHT);
+        skip(epochToSkip * EPOCH_LENGTH);
         // Main call
         staker.lock(address(this), DEFAULT_AMOUNT);
 
@@ -282,11 +282,11 @@ contract Unit_Concrete_BoostedStaker_Lock_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, DEFAULT_AMOUNT);
         assertEq(futur.length, 2);
         assertEq(futur[0].epochsToMaturity, 6);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch - EPOCH_LENGHT));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch - EPOCH_LENGTH));
         assertEq(futur[0].pendingStake, DEFAULT_AMOUNT);
         assertEq(futur[0].lockedStake, 0);
         assertEq(futur[1].epochsToMaturity, 7);
-        assertEq(futur[1].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[1].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch));
         assertEq(futur[1].pendingStake, 0);
         assertEq(futur[1].lockedStake, DEFAULT_AMOUNT);
         assertEq(staker.getGlobalWeight(), weight);

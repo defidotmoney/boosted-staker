@@ -26,7 +26,7 @@ contract Unit_Concrete_BoostedStaker_GetGlobalWeightAt_Tests is Unit_Shared_Test
 
     function test_GetGlobalWeightAt_When_EpochAsked_IsLowerThan_LastUpdateEpoch_NoWeight()
         public
-        timejump(EPOCH_LENGHT)
+        timejump(EPOCH_LENGTH)
     {
         assertEq(staker.globalLastUpdateEpoch(), 0);
         assertEq(staker.getEpoch(), 1);
@@ -50,7 +50,7 @@ contract Unit_Concrete_BoostedStaker_GetGlobalWeightAt_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
-                skipAfter: EPOCH_LENGHT
+                skipAfter: EPOCH_LENGTH
             })
         )
     {
@@ -70,7 +70,7 @@ contract Unit_Concrete_BoostedStaker_GetGlobalWeightAt_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 2
+                skipAfter: EPOCH_LENGTH * 2
             })
         )
     {

@@ -19,7 +19,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccountWithLimit_Tests is Unit_Sh
     function test_CheckpointAccountWithLimit_WhenEpochIsHigherThanCurrentEpoch() public {
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 0);
 
-        skip(EPOCH_LENGHT);
+        skip(EPOCH_LENGTH);
         assertEq(staker.checkpointAccountWithLimit(address(this), 2), 0);
 
         assertEq(staker.getEpoch(), 1);
@@ -32,7 +32,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccountWithLimit_Tests is Unit_Sh
     function test_CheckpointAccountWithLimit_WhenEpochIsEqualToCurrentEpoch() public {
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 0);
 
-        skip(EPOCH_LENGHT);
+        skip(EPOCH_LENGTH);
         assertEq(staker.checkpointAccountWithLimit(address(this), 1), 0);
 
         assertEq(staker.getEpoch(), 1);
@@ -45,7 +45,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccountWithLimit_Tests is Unit_Sh
     function test_CheckpointAccountWithLimit_WhenEpochIsLowerThanCurrentEpoch() public {
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 0);
 
-        skip(EPOCH_LENGHT * 2);
+        skip(EPOCH_LENGTH * 2);
         assertEq(staker.checkpointAccountWithLimit(address(this), 1), 0);
 
         assertEq(staker.getEpoch(), 2);

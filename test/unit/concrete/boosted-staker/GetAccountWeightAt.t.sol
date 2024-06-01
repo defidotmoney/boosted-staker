@@ -45,7 +45,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 0);
         assertEq(staker.getEpoch(), 0);
 
-        skip(EPOCH_LENGHT);
+        skip(EPOCH_LENGTH);
         assertEq(staker.getEpoch(), 1);
         assertEq(staker.getAccountWeightAt(address(this), 0), DEFAULT_AMOUNT);
     }
@@ -62,7 +62,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 0);
         assertEq(staker.getEpoch(), 0);
 
-        skip(EPOCH_LENGHT);
+        skip(EPOCH_LENGTH);
         assertEq(
             staker.getAccountWeightAt(address(this), 1),
             DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS
@@ -82,7 +82,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
         assertEq(staker.getAccountWeight(address(this)), DEFAULT_AMOUNT);
         assertEq(staker.getEpoch(), 0);
 
-        skip(EPOCH_LENGHT);
+        skip(EPOCH_LENGTH);
         assertEq(
             staker.getAccountWeightAt(address(this), 1),
             DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS
@@ -102,7 +102,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
         assertEq(staker.getAccountWeight(address(this)), DEFAULT_AMOUNT);
         assertEq(staker.getEpoch(), 0);
 
-        skip(EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS + 1));
+        skip(EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS + 1));
         assertEq(staker.getAccountWeightAt(address(this), 0), DEFAULT_AMOUNT);
         assertEq(
             staker.getAccountWeightAt(address(this), 1),
@@ -130,7 +130,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT
+                skipAfter: EPOCH_LENGTH
             })
         )
         stake(Modifier_Stake({skipBefore: 0, account: address(this), amount: DEFAULT_AMOUNT, lock: false, skipAfter: 0}))
@@ -143,7 +143,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountWeightAt_Tests is Unit_Shared_Tes
         );
         assertEq(staker.getEpoch(), 1);
 
-        skip(EPOCH_LENGHT * STAKE_GROWTH_EPOCHS);
+        skip(EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
         assertEq(
             staker.getAccountWeightAt(address(this), 1),
             DEFAULT_AMOUNT + DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS

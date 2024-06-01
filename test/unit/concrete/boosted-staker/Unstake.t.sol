@@ -41,7 +41,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -100,7 +100,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -153,7 +153,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, 0);
         assertEq(futur.length, 1);
         assertEq(futur[0].epochsToMaturity, realizeEpoch - epoch);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * realizeEpoch));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * realizeEpoch));
         assertEq(futur[0].pendingStake, DEFAULT_AMOUNT - amountNeeded);
         assertEq(futur[0].lockedStake, 0);
         assertEq(token.balanceOf(address(this)), amountNeeded);
@@ -168,11 +168,11 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: 2 * EPOCH_LENGHT
+                skipAfter: 2 * EPOCH_LENGTH
             })
         )
     {
@@ -222,7 +222,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, 0);
         assertEq(futur.length, 1);
         assertEq(futur[0].epochsToMaturity, STAKE_GROWTH_EPOCHS - epochToSkip);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS + 1)));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS + 1)));
         assertEq(futur[0].pendingStake, DEFAULT_AMOUNT - amountNeeded);
         assertEq(futur[0].lockedStake, 0);
         assertEq(token.balanceOf(address(this)), amountNeeded);
@@ -237,7 +237,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -246,7 +246,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         )
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -311,7 +311,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -320,7 +320,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         )
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -377,7 +377,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq(accountView.lockedStake, DEFAULT_AMOUNT);
         assertEq(futur.length, 1);
         assertEq(futur[0].epochsToMaturity, STAKE_GROWTH_EPOCHS);
-        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS + epoch)));
+        assertEq(futur[0].timestampAtMaturity, staker.START_TIME() + (EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS + epoch)));
         assertEq(futur[0].pendingStake, 0);
         assertEq(futur[0].lockedStake, DEFAULT_AMOUNT);
         assertEq(staker.getGlobalWeight(), weightBefore - weightToRemove);
@@ -393,11 +393,11 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
     {
@@ -454,11 +454,11 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
     {
@@ -521,7 +521,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -530,11 +530,11 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         )
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS - 4),
+                skipBefore: EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS - 4),
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 4
+                skipAfter: EPOCH_LENGTH * 4
             })
         )
     {
@@ -601,7 +601,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         approveUnstaker(address(this), alice)
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
@@ -625,7 +625,7 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,

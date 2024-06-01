@@ -37,7 +37,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
         checkpointAccount(address(this))
@@ -97,7 +97,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
         assertEq(accountView.realizedStake, 0);
         assertEq(futureRealizedStake.length, 1);
         assertEq(futureRealizedStake[0].epochsToMaturity, STAKE_GROWTH_EPOCHS);
-        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGHT * STAKE_GROWTH_EPOCHS);
+        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
         assertEq(futureRealizedStake[0].pendingStake, DEFAULT_AMOUNT);
         assertEq(futureRealizedStake[0].lockedStake, 0);
     }
@@ -124,7 +124,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
         assertEq(accountView.realizedStake, 0);
         assertEq(futureRealizedStake.length, 1);
         assertEq(futureRealizedStake[0].epochsToMaturity, STAKE_GROWTH_EPOCHS);
-        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGHT * STAKE_GROWTH_EPOCHS);
+        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
         assertEq(futureRealizedStake[0].pendingStake, 0);
         assertEq(futureRealizedStake[0].lockedStake, DEFAULT_AMOUNT);
     }
@@ -153,7 +153,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
         assertEq(accountView.realizedStake, 0);
         assertEq(futureRealizedStake.length, 1);
         assertEq(futureRealizedStake[0].epochsToMaturity, STAKE_GROWTH_EPOCHS);
-        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGHT * STAKE_GROWTH_EPOCHS);
+        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
         assertEq(futureRealizedStake[0].pendingStake, DEFAULT_AMOUNT);
         assertEq(futureRealizedStake[0].lockedStake, DEFAULT_AMOUNT);
     }
@@ -170,7 +170,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT
+                skipAfter: EPOCH_LENGTH
             })
         )
     {
@@ -186,7 +186,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
         assertEq(accountView.realizedStake, 0);
         assertEq(futureRealizedStake.length, 1);
         assertEq(futureRealizedStake[0].epochsToMaturity, STAKE_GROWTH_EPOCHS - 1);
-        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGHT * STAKE_GROWTH_EPOCHS);
+        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
         assertEq(futureRealizedStake[0].pendingStake, DEFAULT_AMOUNT);
         assertEq(futureRealizedStake[0].lockedStake, 0);
     }
@@ -203,7 +203,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
     {
@@ -233,7 +233,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
     {
@@ -266,7 +266,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 4
+                skipAfter: EPOCH_LENGTH * 4
             })
         )
         stake(
@@ -275,7 +275,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 6
+                skipAfter: EPOCH_LENGTH * 6
             })
         )
     {
@@ -293,7 +293,7 @@ contract Unit_Concrete_BoostedStaker_GetAccountFullView_Tests is Unit_Shared_Tes
         assertEq(accountView.realizedStake, DEFAULT_AMOUNT);
         assertEq(futureRealizedStake.length, 1);
         assertEq(futureRealizedStake[0].epochsToMaturity, STAKE_GROWTH_EPOCHS - 6);
-        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGHT * 11);
+        assertEq(futureRealizedStake[0].timestampAtMaturity, staker.START_TIME() + EPOCH_LENGTH * 11);
         assertEq(futureRealizedStake[0].pendingStake, DEFAULT_AMOUNT);
         assertEq(futureRealizedStake[0].lockedStake, 0);
     }

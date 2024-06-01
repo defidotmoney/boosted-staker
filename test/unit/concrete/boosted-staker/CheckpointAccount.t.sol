@@ -22,7 +22,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
     /// @notice Test checkpointAccount under the following conditions:
     /// - Account has no stake
     /// - Timejump 1 epoch
-    function test_CheckPointAccount_When_UpToDate_NoPosition_Epoch1() public timejump(EPOCH_LENGHT) {
+    function test_CheckPointAccount_When_UpToDate_NoPosition_Epoch1() public timejump(EPOCH_LENGTH) {
         assertEq(staker.getEpoch(), 1);
         assertEq(staker.checkpointAccount(address(this)), 0);
         assertEq(staker.getAccLastUpdateEpochBSR(address(this)), 1);
@@ -36,11 +36,11 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
     {
@@ -74,11 +74,11 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS - 4)
+                skipAfter: EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS - 4)
             })
         )
         stake(
@@ -87,7 +87,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 4
+                skipAfter: EPOCH_LENGTH * 4
             })
         )
     {
@@ -122,7 +122,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
         public
         stake(
             Modifier_Stake({
-                skipBefore: EPOCH_LENGHT,
+                skipBefore: EPOCH_LENGTH,
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: true,
@@ -135,7 +135,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS - 4)
+                skipAfter: EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS - 4)
             })
         )
         stake(
@@ -144,7 +144,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * 4
+                skipAfter: EPOCH_LENGTH * 4
             })
         )
     {
@@ -182,7 +182,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * (STAKE_GROWTH_EPOCHS + 2)
+                skipAfter: EPOCH_LENGTH * (STAKE_GROWTH_EPOCHS + 2)
             })
         )
     {
@@ -220,7 +220,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
                 account: address(this),
                 amount: DEFAULT_AMOUNT,
                 lock: false,
-                skipAfter: EPOCH_LENGHT * STAKE_GROWTH_EPOCHS
+                skipAfter: EPOCH_LENGTH * STAKE_GROWTH_EPOCHS
             })
         )
         checkpointAccount(address(this))
@@ -238,7 +238,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
         uint256 weight =
             DEFAULT_AMOUNT + DEFAULT_AMOUNT * (MAX_WEIGHT_MULTIPLIER - 1) / STAKE_GROWTH_EPOCHS * STAKE_GROWTH_EPOCHS;
 
-        skip(5 * EPOCH_LENGHT);
+        skip(5 * EPOCH_LENGTH);
         // Main call
         assertEq(staker.checkpointAccount(address(this)), weight);
 
@@ -264,7 +264,7 @@ contract Unit_Concrete_BoostedStaker_CheckpointAccount_Tests is Unit_Shared_Test
     /// - Timejump 5 epochs
     /// - Checkpoint account
     /// Testing the update of last update only.
-    function test_CheckpointAccount_When_PendingLockedAndRealized_AreNull() public timejump(EPOCH_LENGHT) {
+    function test_CheckpointAccount_When_PendingLockedAndRealized_AreNull() public timejump(EPOCH_LENGTH) {
         assertEq(staker.checkpointAccount(address(this)), 0);
 
         // Account data
