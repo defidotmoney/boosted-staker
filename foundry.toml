@@ -8,7 +8,10 @@ evm_version = "paris"
 
 [fuzz]
 runs = 1_000
-
 remappings = ["forge-std/=lib/forge-std/src/", "@openzeppelin/=lib/openzeppelin-contracts/"]
+
+[profile.dependencies]
+forge-std = { version = "1.8.2" }
+"@openzeppelin-contracts" = { version = "5.0.2" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

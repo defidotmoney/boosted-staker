@@ -6,5 +6,6 @@ build/
 reports/
 cache/
 out/
+dependencies/
 lcov.info
 lcov.info.pruned
