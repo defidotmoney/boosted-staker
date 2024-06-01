@@ -43,7 +43,7 @@ contract Unit_Concrete_BoostedStaker_Sweep_Tests is Unit_Shared_Tests_ {
         assertEq(token.balanceOf(address(staker)), DEFAULT_AMOUNT);
         assertEq(staker.totalSupply(), DEFAULT_AMOUNT);
 
-        // Expected event
+        // Expected event -> not emitted in this case
         //vm.expectEmit({emitter: address(token)});
         //emit IERC20.Transfer(address(staker), alice, 0);
 
