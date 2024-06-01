@@ -19,3 +19,29 @@ Based on Yearn's [`yearn-boosted-staker`](https://github.com/yearn/yearn-boosted
 * `StakerFactory` deploys `BoostedStaker` contracts and defines shared constants across all deployments.
 * The factory owner also owns all staker contracts.
 * The owner can disable locks across all `BoostedStaker` deployments at the same time. This is useful when sunsetting the protocol, to allow users to withdraw.
+
+## Installation
+
+- First install foundry:
+```
+curl -L https://foundry.paradigm.xyz | bash
+```
+
+- Then install dependencies manager: soldeer
+```
+cargo install soldeer
+```
+
+- Run test
+```
+make test
+```
+or 
+```
+forge test
+```
+
+- Coverage
+```
+make coverage
+```
