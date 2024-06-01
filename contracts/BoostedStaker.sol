@@ -495,9 +495,10 @@ contract BoostedStaker {
 
     /** @dev The increased weight from `amount` after a number of epochs has passed */
     function _getWeightGrowth(uint256 amount, uint256 epochs) internal view returns (uint128 growth) {
-        assert(STAKE_GROWTH_EPOCHS >= epochs); // TODO remove me
         amount *= MAX_WEIGHT_MULTIPLIER - 1;
-        return uint128((amount * epochs) / STAKE_GROWTH_EPOCHS);
+        // division before multiplication is intentional to ensure consistent rounding loss each epoch
+        // otherwise there is a possibility for an underflow when the last user unstakes
+        return uint128((amount / STAKE_GROWTH_EPOCHS) * epochs);
     }
 
     /** @dev The total weight of `amount` after a number of epochs has passed */
@@ -565,8 +566,6 @@ contract BoostedStaker {
         if (_systemEpoch == lastUpdateEpoch) {
             return (acctData, epochWeights[lastUpdateEpoch]);
         }
-
-        require(_systemEpoch > lastUpdateEpoch, "DFM:BS Invalid epoch");
 
         if (pending == 0 && locked == 0) {
             if (realized != 0) {
