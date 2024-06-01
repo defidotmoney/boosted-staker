@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Unit_Shared_Tests_} from "../../shared/Shared.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {BoostedStaker} from "../../../../../contracts/BoostedStaker.sol";
+import {BoostedStaker} from "../../../../contracts/BoostedStaker.sol";
 import {DeploymentParams as DP} from "../../../utils/DeploymentParameters.sol";
 
 contract Unit_Concrete_BoostedStaker_Constructor_Tests is Unit_Shared_Tests_ {

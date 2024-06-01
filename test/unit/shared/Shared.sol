@@ -5,8 +5,8 @@ pragma solidity 0.8.25;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 // Contracts
-import {StakerFactory} from "../../../../contracts/Factory.sol";
-import {BoostedStaker} from "../../../../contracts/BoostedStaker.sol";
+import {StakerFactory} from "../../../contracts/Factory.sol";
+import {BoostedStaker} from "../../../contracts/BoostedStaker.sol";
 
 // Test imports
 import {Modifiers} from "./Modifiers.sol";

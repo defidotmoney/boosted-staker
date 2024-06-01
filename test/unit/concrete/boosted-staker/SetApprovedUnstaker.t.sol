@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Unit_Shared_Tests_} from "../../shared/Shared.sol";
 
 import {MockERC20} from "../../../utils/mocks/MockERC20.sol";
-import {BoostedStaker} from "../../../../../contracts/BoostedStaker.sol";
+import {BoostedStaker} from "../../../../contracts/BoostedStaker.sol";
 import {WizardBoostedStaker} from "../../../utils/wizards/WizardBoostedStaker.sol";
 
 contract Unit_Concrete_BoostedStaker_SetApprovedUnstaker_Tests is Unit_Shared_Tests_ {

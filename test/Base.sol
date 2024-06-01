@@ -8,8 +8,8 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Test} from "forge-std/Test.sol";
 
 // Contracts
-import {StakerFactory} from "../../contracts/Factory.sol";
-import {BoostedStaker} from "../../contracts/BoostedStaker.sol";
+import {StakerFactory} from "../contracts/Factory.sol";
+import {BoostedStaker} from "../contracts/BoostedStaker.sol";
 
 abstract contract Base_Test_ is Test {
     //////////////////////////////////////////////////////
