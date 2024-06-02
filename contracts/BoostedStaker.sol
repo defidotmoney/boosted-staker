@@ -43,14 +43,14 @@ contract BoostedStaker {
         uint112 pendingStake; // Amount of stake that has not yet fully realized weight.
         uint112 lockedStake; // Amount of stake that has fully realized weight, but cannot be withdrawn.
         uint16 lastUpdateEpoch; // Epoch of last sync.
-        // One byte member to represent epochs in which an account has pending weight changes.
+        // Two byte member to represent epochs in which an account has pending weight changes.
         // A bit is set to true when the account has a non-zero token balance to be realized in
         // the corresponding epoch. We use this as a "map", allowing us to reduce gas consumption
         // by avoiding unnecessary lookups on epochs which an account has zero pending stake.
         //
-        // Example: 0100000000000001
-        // The left-most bit represents the final epoch of pendingStake.
-        // Therefore, we can see that account has stake updates to process only in epochs 15 and 1.
+        // Example: 0100000000000101
+        // The least significant bit represents the first epoch of pendingStake.
+        // Therefore, we can see that account has stake updates to process only in epochs 1, 3 and 15.
         uint16 updateEpochBitmap;
     }
 
