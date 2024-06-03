@@ -27,9 +27,9 @@ Based on Yearn's [`yearn-boosted-staker`](https://github.com/yearn/yearn-boosted
 curl -L https://foundry.paradigm.xyz | bash
 ```
 
-- Then install dependencies manager: soldeer
+- Then install dependencies
 ```
-cargo install soldeer
+make install
 ```
 
 - Run test
