@@ -10,7 +10,10 @@ default:
 # Always keep Forge up to date
 install:
 	foundryup
-	forge install
+	cargo install soldeer
+	soldeer install forge-std~1.8.2
+	soldeer install @openzeppelin-contracts~5.0.2
+#forge install
 
 snapshot:
 	@forge snapshot
