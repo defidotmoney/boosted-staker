@@ -9,3 +9,4 @@ out/
 dependencies/
 lcov.info
 lcov.info.pruned
+soldeer.lock
