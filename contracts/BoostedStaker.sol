@@ -74,21 +74,9 @@ contract BoostedStaker {
         uint256 lockedStake;
     }
 
-    event Staked(
-        address indexed account,
-        uint256 indexed epoch,
-        uint256 amount,
-        uint256 newUserWeight,
-        uint256 weightAdded,
-        bool isLocked
-    );
-    event Unstaked(
-        address indexed account,
-        uint256 indexed epoch,
-        uint256 amount,
-        uint256 newUserWeight,
-        uint256 weightRemoved
-    );
+    event Staked(address indexed account, uint256 indexed epoch, uint256 amount, uint256 weightAdded, bool isLocked);
+    event Unstaked(address indexed account, uint256 indexed epoch, uint256 amount, uint256 weightRemoved);
+    event AccountWeightUpdated(address indexed account, uint256 indexed epoch, uint256 timestamp, uint256 newWeight);
     event ApprovedUnstakerSet(address indexed account, address indexed caller, bool isApproved);
     event LocksDisabled();
 
@@ -425,7 +413,8 @@ contract BoostedStaker {
 
         totalSupply -= uint120(_amount);
 
-        emit Unstaked(_account, systemEpoch, _amount, newAccountWeight, weightToRemove);
+        emit Unstaked(_account, systemEpoch, _amount, weightToRemove);
+        emit AccountWeightUpdated(_account, systemEpoch, block.timestamp, newAccountWeight);
 
         STAKE_TOKEN.safeTransfer(_receiver, _amount);
     }
@@ -567,7 +556,9 @@ contract BoostedStaker {
         accountData[_account] = acctData;
 
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), uint256(_amount));
-        emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight, isLocked);
+
+        emit Staked(_account, systemEpoch, _amount, weight, isLocked);
+        emit AccountWeightUpdated(_account, systemEpoch, block.timestamp, accountWeight + weight);
     }
 
     function _checkpointAccount(
