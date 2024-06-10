@@ -511,12 +511,15 @@ contract BoostedStaker {
 
     function _stake(address _account, uint256 _amount, bool isLocked) internal {
         require(_amount > 0, "DFM:BS Cannot stake 0");
-        require(_amount < type(uint112).max, "DFM:BS Amount too large");
+
+        uint256 newTotalSupply = totalSupply + _amount;
+        require(newTotalSupply < type(uint112).max, "DFM:BS Amount too large");
+        totalSupply = uint120(newTotalSupply);
 
         // Before going further, let's sync our account and global weights
         uint256 systemEpoch = getEpoch();
         (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
+        uint128 globalWeight = uint128(_checkpointGlobal(systemEpoch));
 
         uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
 
@@ -540,7 +543,6 @@ contract BoostedStaker {
 
         acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += uint120(_amount);
 
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight, isLocked);
