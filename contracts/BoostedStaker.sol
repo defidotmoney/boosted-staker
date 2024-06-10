@@ -387,9 +387,11 @@ contract BoostedStaker {
                         } else {
                             // handle the case where we have more pending than needed
                             weightToRemove += _getWeight(amountNeeded, epochIndex);
-                            epochToRealize[epochToCheck].pending -= amountNeeded;
+                            epochToRealize[epochToCheck].pending = pending - amountNeeded;
                             globalEpochToRealize[epochToCheck] -= amountNeeded;
-                            if (amountNeeded == pending) bitmap = bitmap ^ mask;
+                            if (amountNeeded == pending && epochToRealize[epochToCheck].locked == 0) {
+                                bitmap = bitmap ^ mask;
+                            }
                             amountNeeded = 0;
                             break;
                         }
