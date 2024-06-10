@@ -415,10 +415,13 @@ contract BoostedStaker {
 
         accountData[_account] = acctData;
 
+        uint256 newAccountWeight = accountEpochWeights[_account][systemEpoch];
+        if (newAccountWeight < weightToRemove) weightToRemove = newAccountWeight;
+        newAccountWeight = newAccountWeight - weightToRemove;
+        accountEpochWeights[_account][systemEpoch] = uint128(newAccountWeight);
+
         globalGrowthRate -= uint112(pendingRemoved);
         globalEpochWeights[systemEpoch] -= uint128(weightToRemove);
-        uint256 newAccountWeight = accountEpochWeights[_account][systemEpoch] - weightToRemove;
-        accountEpochWeights[_account][systemEpoch] = uint128(newAccountWeight);
 
         totalSupply -= uint120(_amount);
 
