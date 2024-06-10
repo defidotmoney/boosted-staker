@@ -679,4 +679,21 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         staker.unstake(address(this), DEFAULT_AMOUNT, address(this));
     }
 
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User locks twice with amounts that individually are not divisible by
+    ///   `STAKE_GROWTH_EPOCHS`, but their sum is
+    /// - Skip until lock expires
+    /// - User unstakes
+    /// Validates fix of BailSec finding Issue_06 where arithmetic imprecision can cause an underflow on the final withdrawal
+    function test_Unstake_Rounding_Imprecision()
+        public
+        stake(Modifier_Stake({ skipBefore: 0, account: address(this), amount: 69, lock: true, skipAfter: 0 }))
+        stake(Modifier_Stake({ skipBefore: 0, account: address(this), amount: 71, lock: true, skipAfter: 0 }))
+    {
+        // Main call
+        skip(EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
+        staker.unstake(address(this), 140, address(this));
+    }
+
 }
