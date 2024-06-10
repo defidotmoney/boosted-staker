@@ -448,7 +448,7 @@ contract BoostedStaker {
     /**
         @notice Checkpoint an account using a specified epoch limit.
         @dev    To use in the event that significant number of epochs have passed since last
-                heckpoint and single call becomes too expensive.
+                checkpoint and single call becomes too expensive.
         @param _account Account to checkpoint.
         @param _epoch Epoch which we want to checkpoint to.
         @return weight Account weight for provided epoch.
@@ -460,6 +460,19 @@ contract BoostedStaker {
         (acctData, weight) = _checkpointAccount(_account, _epoch);
         accountData[_account] = acctData;
         return weight;
+    }
+
+    /**
+        @notice Checkpoint the total system weight using a specified epoch limit.
+        @dev    To use in the event that significant number of epochs have passed since last
+                checkpoint and single call becomes too expensive.
+        @param _epoch Epoch which we want to checkpoint to.
+        @return weight Total system weight at most recently checkpointed epoch.
+    */
+    function checkpointGlobalWithLimit(uint256 _epoch) external returns (uint256 weight) {
+        uint256 systemEpoch = getEpoch();
+        if (_epoch > systemEpoch) _epoch = systemEpoch;
+        return _checkpointGlobal(_epoch);
     }
 
     /**
@@ -646,13 +659,11 @@ contract BoostedStaker {
 
         uint128 weight = globalEpochWeights[lastUpdateEpoch];
 
+        if (lastUpdateEpoch >= systemEpoch) return weight;
+
         if (weight == 0) {
             globalLastUpdateEpoch = uint16(systemEpoch);
             return 0;
-        }
-
-        if (lastUpdateEpoch == systemEpoch) {
-            return weight;
         }
 
         while (lastUpdateEpoch < systemEpoch) {
