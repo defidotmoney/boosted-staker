@@ -387,9 +387,11 @@ contract BoostedStaker {
                         } else {
                             // handle the case where we have more pending than needed
                             weightToRemove += _getWeight(amountNeeded, epochIndex);
-                            epochToRealize[epochToCheck].pending -= amountNeeded;
+                            epochToRealize[epochToCheck].pending = pending - amountNeeded;
                             globalEpochToRealize[epochToCheck] -= amountNeeded;
-                            if (amountNeeded == pending) bitmap = bitmap ^ mask;
+                            if (amountNeeded == pending && epochToRealize[epochToCheck].locked == 0) {
+                                bitmap = bitmap ^ mask;
+                            }
                             amountNeeded = 0;
                             break;
                         }
@@ -413,10 +415,13 @@ contract BoostedStaker {
 
         accountData[_account] = acctData;
 
+        uint256 newAccountWeight = accountEpochWeights[_account][systemEpoch];
+        if (newAccountWeight < weightToRemove) weightToRemove = newAccountWeight;
+        newAccountWeight = newAccountWeight - weightToRemove;
+        accountEpochWeights[_account][systemEpoch] = uint128(newAccountWeight);
+
         globalGrowthRate -= uint112(pendingRemoved);
         globalEpochWeights[systemEpoch] -= uint128(weightToRemove);
-        uint256 newAccountWeight = accountEpochWeights[_account][systemEpoch] - weightToRemove;
-        accountEpochWeights[_account][systemEpoch] = uint128(newAccountWeight);
 
         totalSupply -= uint120(_amount);
 
@@ -443,10 +448,13 @@ contract BoostedStaker {
     /**
         @notice Checkpoint an account using a specified epoch limit.
         @dev    To use in the event that significant number of epochs have passed since last
-                heckpoint and single call becomes too expensive.
+                checkpoint and single call becomes too expensive.
         @param _account Account to checkpoint.
         @param _epoch Epoch which we want to checkpoint to.
-        @return weight Account weight for provided epoch.
+        @return weight Account weight at most recently checkpointed epoch.
+                       If the account weight was checkpointed more recently than
+                       `_epoch` this value will be the current weight, not the
+                       weight at _epoch`.
     */
     function checkpointAccountWithLimit(address _account, uint256 _epoch) external returns (uint256 weight) {
         uint256 systemEpoch = getEpoch();
@@ -455,6 +463,22 @@ contract BoostedStaker {
         (acctData, weight) = _checkpointAccount(_account, _epoch);
         accountData[_account] = acctData;
         return weight;
+    }
+
+    /**
+        @notice Checkpoint the total system weight using a specified epoch limit.
+        @dev    To use in the event that significant number of epochs have passed since last
+                checkpoint and single call becomes too expensive.
+        @param _epoch Epoch which we want to checkpoint to.
+        @return weight Total system weight at most recently checkpointed epoch.
+                       If the system weight was checkpointed more recently than
+                       `_epoch` this value will be the current weight, not the
+                       weight at _epoch`.
+    */
+    function checkpointGlobalWithLimit(uint256 _epoch) external returns (uint256 weight) {
+        uint256 systemEpoch = getEpoch();
+        if (_epoch > systemEpoch) _epoch = systemEpoch;
+        return _checkpointGlobal(_epoch);
     }
 
     /**
@@ -509,12 +533,15 @@ contract BoostedStaker {
 
     function _stake(address _account, uint256 _amount, bool isLocked) internal {
         require(_amount > 0, "DFM:BS Cannot stake 0");
-        require(_amount < type(uint112).max, "DFM:BS Amount too large");
+
+        uint256 newTotalSupply = totalSupply + _amount;
+        require(newTotalSupply < type(uint112).max, "DFM:BS Amount too large");
+        totalSupply = uint120(newTotalSupply);
 
         // Before going further, let's sync our account and global weights
         uint256 systemEpoch = getEpoch();
         (AccountData memory acctData, uint256 accountWeight) = _checkpointAccount(_account, systemEpoch);
-        uint112 globalWeight = uint112(_checkpointGlobal(systemEpoch));
+        uint128 globalWeight = uint128(_checkpointGlobal(systemEpoch));
 
         uint256 realizeEpoch = systemEpoch + STAKE_GROWTH_EPOCHS;
 
@@ -538,7 +565,6 @@ contract BoostedStaker {
 
         acctData.updateEpochBitmap |= 1; // Use bitwise or to ensure bit is flipped at least weighted position.
         accountData[_account] = acctData;
-        totalSupply += uint120(_amount);
 
         STAKE_TOKEN.safeTransferFrom(msg.sender, address(this), uint256(_amount));
         emit Staked(_account, systemEpoch, _amount, accountWeight + weight, weight, isLocked);
@@ -563,7 +589,7 @@ contract BoostedStaker {
             acctData.lockedStake = 0;
         }
 
-        if (_systemEpoch == lastUpdateEpoch) {
+        if (_systemEpoch <= lastUpdateEpoch) {
             return (acctData, epochWeights[lastUpdateEpoch]);
         }
 
@@ -639,13 +665,11 @@ contract BoostedStaker {
 
         uint128 weight = globalEpochWeights[lastUpdateEpoch];
 
+        if (lastUpdateEpoch >= systemEpoch) return weight;
+
         if (weight == 0) {
             globalLastUpdateEpoch = uint16(systemEpoch);
             return 0;
-        }
-
-        if (lastUpdateEpoch == systemEpoch) {
-            return weight;
         }
 
         while (lastUpdateEpoch < systemEpoch) {

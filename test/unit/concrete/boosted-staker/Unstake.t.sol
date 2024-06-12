@@ -639,4 +639,61 @@ contract Unit_Concrete_BoostedStaker_Unstake_Tests is Unit_Shared_Tests_ {
         assertEq((token.balanceOf(alice)), DEFAULT_AMOUNT);
         // Only testing unstaking with different receiver, no need to check other values, as already tested in tests above.
     }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User stakes
+    /// - User locks in same epoch
+    /// - User stakes again in next epoch
+    /// - User unstake full position (lock excluded)
+    /// - Skip until lock expires
+    /// - User unstakes unlocked tokens
+    /// Validates fix of BailSec finding Issue_01 where bitmap was incorrectly flip when withdrawing full stake
+    function test_Full_Unstake_Does_Not_Affect_Lock_In_Bitmap()
+        public
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGTH,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+        stake(Modifier_Stake({skipBefore: 0, account: address(this), amount: DEFAULT_AMOUNT, lock: true, skipAfter: 0}))
+        stake(
+            Modifier_Stake({
+                skipBefore: EPOCH_LENGTH,
+                account: address(this),
+                amount: DEFAULT_AMOUNT,
+                lock: false,
+                skipAfter: 0
+            })
+        )
+
+    {
+        // Main call
+        staker.unstake(address(this), DEFAULT_AMOUNT * 2, address(this));
+        skip(EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
+        // the lock should now be withdrawable
+        staker.unstake(address(this), DEFAULT_AMOUNT, address(this));
+    }
+
+    /// @notice Test Unstake under the following conditions:
+    /// - Timejump to next epoch to avoid false 0
+    /// - User locks twice with amounts that individually are not divisible by
+    ///   `STAKE_GROWTH_EPOCHS`, but their sum is
+    /// - Skip until lock expires
+    /// - User unstakes
+    /// Validates fix of BailSec finding Issue_06 where arithmetic imprecision can cause an underflow on the final withdrawal
+    function test_Unstake_Rounding_Imprecision()
+        public
+        stake(Modifier_Stake({ skipBefore: 0, account: address(this), amount: 69, lock: true, skipAfter: 0 }))
+        stake(Modifier_Stake({ skipBefore: 0, account: address(this), amount: 71, lock: true, skipAfter: 0 }))
+    {
+        // Main call
+        skip(EPOCH_LENGTH * STAKE_GROWTH_EPOCHS);
+        staker.unstake(address(this), 140, address(this));
+    }
+
 }
