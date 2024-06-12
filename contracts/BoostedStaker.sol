@@ -451,7 +451,10 @@ contract BoostedStaker {
                 checkpoint and single call becomes too expensive.
         @param _account Account to checkpoint.
         @param _epoch Epoch which we want to checkpoint to.
-        @return weight Account weight for provided epoch.
+        @return weight Account weight at most recently checkpointed epoch.
+                       If the account weight was checkpointed more recently than
+                       `_epoch` this value will be the current weight, not the
+                       weight at _epoch`.
     */
     function checkpointAccountWithLimit(address _account, uint256 _epoch) external returns (uint256 weight) {
         uint256 systemEpoch = getEpoch();
@@ -468,6 +471,9 @@ contract BoostedStaker {
                 checkpoint and single call becomes too expensive.
         @param _epoch Epoch which we want to checkpoint to.
         @return weight Total system weight at most recently checkpointed epoch.
+                       If the system weight was checkpointed more recently than
+                       `_epoch` this value will be the current weight, not the
+                       weight at _epoch`.
     */
     function checkpointGlobalWithLimit(uint256 _epoch) external returns (uint256 weight) {
         uint256 systemEpoch = getEpoch();
