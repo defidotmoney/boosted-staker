@@ -583,7 +583,7 @@ contract BoostedStaker {
             acctData.lockedStake = 0;
         }
 
-        if (_systemEpoch == lastUpdateEpoch) {
+        if (_systemEpoch <= lastUpdateEpoch) {
             return (acctData, epochWeights[lastUpdateEpoch]);
         }
 
