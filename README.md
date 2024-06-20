@@ -22,26 +22,40 @@ Based on Yearn's [`yearn-boosted-staker`](https://github.com/yearn/yearn-boosted
 
 ## Installation
 
-- First install foundry:
+First install foundry:
+
 ```
 curl -L https://foundry.paradigm.xyz | bash
 ```
 
-- Then install dependencies
+Then install dependencies:
+
 ```
 make install
 ```
 
-- Run test
+## Tests
+
+
+To run the test suite:
 ```
 make test
 ```
-or 
+or
 ```
 forge test
 ```
 
-- Coverage
+To view a test coverage report:
+
 ```
 make coverage
 ```
+
+## Audits
+
+Audited by [Bail Security](https://bailsec.io/) in June, 2024. The report is available to view [here](https://github.com/defidotmoney/audits/blob/main/audits/BoostedStaker%20-%20BailSec%20-%20June%202024.pdf).
+
+## License
+
+This project is licensed under the [AGPL-3.0 license](LICENSE).
